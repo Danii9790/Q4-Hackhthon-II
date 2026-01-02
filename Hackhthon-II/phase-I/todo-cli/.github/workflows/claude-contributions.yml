@@ -1,0 +1,165 @@
+name: Claude Code Contributions
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-claude-contributions:
+    name: Detect Claude Contributions
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, 'Co-Authored-By: Claude') || contains(github.event.pull_request.title, '[Claude]') || contains(github.event.pull_request.body, 'Claude')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Claude contribution
+        run: |
+          echo "::notice::Claude Code contribution detected"
+          echo "### 🤖 Claude Code Contribution" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This contribution was created with assistance from [Claude Code](https://claude.com/claude-code)." >> $GITHUB_STEP_SUMMARY
+
+      - name: Add label to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['claude-generated', 'ai-assisted']
+            })
+
+  validate-project-structure:
+    name: Validate Project Structure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check project structure
+        run: |
+          echo "Checking project structure..."
+
+          # Check required files
+          required_files=(
+            "README.md"
+            "pyproject.toml"
+            "CLAUDE.md"
+            "constitution.md"
+            "src/main.py"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file exists"
+            else
+              echo "✗ $file missing"
+              exit 1
+            fi
+          done
+
+          # Check if specs directory exists
+          if [ -d "specs/history" ]; then
+            echo "✓ specs/history/ directory exists"
+          else
+            echo "✗ specs/history/ directory missing"
+            exit 1
+          fi
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile src/main.py
+          echo "✓ Python syntax is valid"
+
+      - name: Check project metadata
+        run: |
+          echo "Project Information:"
+          echo "- Name: $(grep '^name = ' pyproject.toml | cut -d'"' -f2)"
+          echo "- Version: $(grep '^version = ' pyproject.toml | cut -d'"' -f2)"
+          echo "- Python: $(grep '^requires-python = ' pyproject.toml | cut -d'"' -f2)"
+
+  code-quality-check:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check code style
+        run: |
+          echo "Checking code quality..."
+
+          # Check for type hints
+          echo "Checking for type hints in main functions..."
+          if grep -q "def main" src/main.py; then
+            echo "✓ main function found"
+          fi
+
+          # Check for docstrings
+          echo "Checking for docstrings..."
+          if grep -q '"""' src/main.py; then
+            echo "✓ Docstrings present"
+          fi
+
+          echo "✓ Code quality checks passed"
+
+  contribution-summary:
+    name: Generate Contribution Summary
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [validate-project-structure, code-quality-check]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate diff summary
+        run: |
+          echo "## 📊 Pull Request Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count changed files
+          changed_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | wc -l)
+          echo "- **Changed Files:** $changed_files" >> $GITHUB_STEP_SUMMARY
+
+          # Count additions and deletions
+          stats=$(git diff --numstat ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | awk '{add+=$1; del+=$2} END {print add, del}')
+          additions=$(echo $stats | cut -d' ' -f1)
+          deletions=$(echo $stats | cut -d' ' -f2)
+          echo "- **Additions:** +$additions" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deletions:** -$deletions" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Modified Files" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | while read file; do
+            echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+          done

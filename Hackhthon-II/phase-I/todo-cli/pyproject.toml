@@ -1,0 +1,23 @@
+[project]
+name = "todo-cli"
+version = "0.1.0"
+description = "A command-line todo application built with spec-driven development"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+authors = [
+    {name = "Hackathon Team"}
+]
+license = {text = "MIT"}
+keywords = ["todo", "cli", "task-manager", "productivity"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+todo = "src.main:main"
