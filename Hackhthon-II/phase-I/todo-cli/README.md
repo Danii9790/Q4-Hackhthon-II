@@ -1,5 +1,9 @@
 # Todo CLI
 
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Claude Code](https://img.shields.io/badge/Made%20with-Claude%20Code-orange.svg)](https://claude.com/claude-code)
+
 An **interactive** command-line todo application built with spec-driven development using Claude Code and Spec-Kit Plus methodology.
 
 ## ✨ Features
