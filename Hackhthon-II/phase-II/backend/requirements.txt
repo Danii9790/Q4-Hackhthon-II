@@ -1,29 +1,24 @@
 # Production Dependencies for Todo Backend
-# Generated from pyproject.toml - Pinned versions for deployment consistency
+# Updated for Render compatibility with pre-built wheels
 
 # Core Framework
-fastapi==0.104.1
+fastapi>=0.115.0,<0.116.0
 
 # Database
-sqlmodel==0.0.14
-psycopg2-binary==2.9.9
-alembic==1.13.1
+sqlmodel>=0.0.22,<0.1.0
+psycopg2-binary>=2.9.9,<3.0.0
+alembic>=1.14.0,<2.0.0
 
 # Data Validation
-pydantic==2.5.3
-email-validator==2.1.0
+pydantic>=2.10.0,<3.0.0
+email-validator>=2.1.0,<3.0.0
 
 # Authentication
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+python-jose[cryptography]>=3.3.0,<4.0.0
+passlib[bcrypt]>=1.7.4,<2.0.0
 
 # Server
-uvicorn[standard]==0.24.0
+uvicorn[standard]>=0.32.0,<1.0.0
 
-# Development Dependencies (uncomment for local development)
-# pytest==7.4.3
-# pytest-asyncio==0.21.1
-# httpx==0.25.2
-# black==23.12.1
-# isort==5.13.2
-# mypy==1.7.1
+# Environment
+python-dotenv>=1.0.0,<2.0.0
