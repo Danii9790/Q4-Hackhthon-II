@@ -18,8 +18,8 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'src'))
 
-from src.db import engine
-from src.models import User, Task
+from db import engine
+from models import User, Task
 from sqlmodel import SQLModel
 
 # this is the Alembic Config object
