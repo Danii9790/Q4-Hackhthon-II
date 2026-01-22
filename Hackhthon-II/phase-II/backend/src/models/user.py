@@ -24,6 +24,8 @@ class User(SQLModel, table=True):
         password_hash: Bcrypt hash of user's password (never returned in responses)
         name: User's display name (optional)
         created_at: Account creation timestamp
+        reset_token: Password reset token (optional)
+        reset_token_expires: When the reset token expires (optional)
     """
     __tablename__ = "users"
 
@@ -32,6 +34,8 @@ class User(SQLModel, table=True):
     password_hash: str = Field(default=None, exclude=True)  # Never return in API responses
     name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    reset_token: Optional[str] = None
+    reset_token_expires: Optional[datetime] = None
 
     # Relationships
     tasks: list["Task"] = Relationship(back_populates="user")

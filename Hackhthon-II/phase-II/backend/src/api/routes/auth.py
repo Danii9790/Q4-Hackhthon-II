@@ -372,3 +372,201 @@ async def signin(
             created_at=user.created_at
         )
     )
+
+
+# ============================================================================
+# Password Reset Endpoints
+# ============================================================================
+
+
+class ForgotPasswordRequest(BaseModel):
+    """
+    Request schema for password reset.
+    """
+    email: EmailStr = Field(..., description="User email address")
+
+
+class ForgotPasswordResponse(BaseModel):
+    """
+    Response schema for password reset request.
+    """
+    message: str = Field(..., description="Confirmation message")
+    reset_link: str = Field(..., description="Password reset link (for development)")
+
+
+class ResetPasswordRequest(BaseModel):
+    """
+    Request schema for resetting password with token.
+    """
+    token: str = Field(..., description="Password reset token")
+    new_password: str = Field(..., min_length=8, max_length=100, description="New password (min 8 chars)")
+
+
+class ResetPasswordResponse(BaseModel):
+    """
+    Response schema for successful password reset.
+    """
+    message: str = Field(..., description="Success message")
+
+
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        404: {"model": ErrorResponse, "description": "Email not found"},
+        500: {"model": ErrorResponse, "description": "Server error"}
+    }
+)
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    session: Annotated[Session, Depends(get_session)]
+) -> ForgotPasswordResponse:
+    """
+    Initiate password reset by generating a reset token.
+
+    This endpoint:
+    1. Finds user by email
+    2. Generates a secure reset token
+    3. Stores token with expiration (1 hour)
+    4. Returns reset link (in production, this would be emailed)
+
+    Args:
+        request: Forgot password request with email
+        session: Database session
+
+    Returns:
+        ForgotPasswordResponse with reset link
+
+    Raises:
+        HTTPException 404: If email not found (we still return success for security)
+        HTTPException 500: If server error occurs
+    """
+    # Find user by email
+    user = session.execute(
+        select(User).where(User.email == request.email)
+    ).scalar_one_or_none()
+
+    # For security, always return success even if email doesn't exist
+    if not user:
+        return ForgotPasswordResponse(
+            message="If an account exists with this email, a password reset link has been sent.",
+            reset_link=""
+        )
+
+    # Generate reset token
+    import secrets
+    reset_token = secrets.token_urlsafe(32)
+    
+    # Set expiration to 1 hour from now
+    reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    # Store reset token in database
+    user.reset_token = reset_token
+    user.reset_token_expires = reset_token_expires
+
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "DATABASE_ERROR",
+                "message": "Failed to process password reset request"
+            }
+        )
+
+    # In production, you would send an email with the reset link
+    # For now, we return it in the response for development
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+
+    return ForgotPasswordResponse(
+        message="If an account exists with this email, a password reset link has been sent.",
+        reset_link=reset_link  # In production, don't include this
+    )
+
+
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid or expired token"},
+        404: {"model": ErrorResponse, "description": "Token not found"},
+        500: {"model": ErrorResponse, "description": "Server error"}
+    }
+)
+async def reset_password(
+    request: ResetPasswordRequest,
+    session: Annotated[Session, Depends(get_session)]
+) -> ResetPasswordResponse:
+    """
+    Reset user password using a valid reset token.
+
+    This endpoint:
+    1. Finds user by reset token
+    2. Validates token hasn't expired
+    3. Hashes new password
+    4. Updates password in database
+    5. Clears reset token
+
+    Args:
+        request: Reset password request with token and new password
+        session: Database session
+
+    Returns:
+        ResetPasswordResponse with success message
+
+    Raises:
+        HTTPException 400: If token is invalid or expired
+        HTTPException 500: If server error occurs
+    """
+    # Find user by reset token
+    user = session.execute(
+        select(User).where(User.reset_token == request.token)
+    ).scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_TOKEN",
+                "message": "Invalid or expired reset token"
+            }
+        )
+
+    # Check if token has expired
+    if not user.reset_token_expires or user.reset_token_expires < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EXPIRED_TOKEN",
+                "message": "Reset token has expired. Please request a new one."
+            }
+        )
+
+    # Hash new password
+    hashed_password = get_password_hash(request.new_password)
+
+    # Update password and clear reset token
+    user.password_hash = hashed_password
+    user.reset_token = None
+    user.reset_token_expires = None
+
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "DATABASE_ERROR",
+                "message": "Failed to reset password"
+            }
+        )
+
+    return ResetPasswordResponse(
+        message="Password has been reset successfully. You can now sign in with your new password."
+    )
