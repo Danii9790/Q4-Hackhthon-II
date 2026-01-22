@@ -1,0 +1,49 @@
+/**
+ * Global CSS styles for Todo Application.
+ *
+ * This file includes Tailwind CSS directives and any custom global styles.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Custom base styles.
+ */
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+/**
+ * Custom component styles.
+ */
+@layer components {
+  /* Button base styles */
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+  }
+
+  /* Input base styles */
+  .input {
+    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm;
+  }
+
+  /* Card base styles */
+  .card {
+    @apply bg-white shadow rounded-lg p-6;
+  }
+}
