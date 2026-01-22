@@ -5,7 +5,7 @@
  *
  * Allows users to reset their password using a valid token.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -13,7 +13,7 @@ import { fadeInUp, scaleIn } from '@/lib/animations'
 import { colors } from '@/styles/tokens'
 import axios from 'axios'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [token, setToken] = useState('')
@@ -217,7 +217,7 @@ export default function ResetPasswordPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none block w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 outline-none"
-                placeholder="••••••••"
+                placeholder="•••••••••"
               />
             </motion.div>
 
@@ -233,7 +233,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="appearance-none block w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 outline-none"
-                placeholder="••••••••"
+                placeholder="•••••••••"
               />
             </motion.div>
 
@@ -274,5 +274,29 @@ export default function ResetPasswordPage() {
         </motion.div>
       </motion.div>
     </div>
+  )
+}
+
+// Loading fallback
+function ResetPasswordLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50 px-4">
+      <div className="flex items-center gap-3">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"
+        />
+        <span className="text-gray-600">Loading...</span>
+      </div>
+    </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordLoading />}>
+      <ResetPasswordForm />
+    </Suspense>
   )
 }
