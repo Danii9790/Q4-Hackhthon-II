@@ -81,6 +81,11 @@ function clearSession(): void {
  *
  * @returns JWT token or null if not authenticated
  */
+
+/**
+ * Export clearSession for use in API client
+ */
+export { clearSession };
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(SESSION_KEYS.TOKEN);

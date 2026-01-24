@@ -25,8 +25,9 @@ import TaskList from '@/components/task/TaskList'
 import EditTaskModal from '@/components/task/EditTaskModal'
 import ConfirmDeleteDialog from '@/components/task/ConfirmDeleteDialog'
 import type { Task } from '@/types/task'
-import { fadeInUp, staggerContainer, buttonHover, buttonTap, shimmer, getMotionProps } from '@/lib/animations'
+import { fadeInUp, staggerContainer, buttonHover, buttonTap, getMotionProps } from '@/lib/animations'
 import { gradients, colors, shadows } from '@/styles/tokens'
+import { auth } from '@/lib/auth'
 
 interface UserData {
   id: string
@@ -165,16 +166,9 @@ export default function DashboardPage() {
    */
   const handleSignOut = useCallback(async () => {
     try {
-      const { authClient } = await import('@/lib/auth')
-      await authClient.signOut()
+      await auth.signOut()
     } catch (error) {
       console.error('Failed to sign out:', error)
-    }
-
-    // Clear localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user_data')
     }
 
     router.push('/login')
