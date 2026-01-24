@@ -26,9 +26,6 @@ SECRET_KEY = os.getenv("BETTER_AUTH_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
-# HTTP Basic for initial credentials
-security = HTTPBasic()
-
 
 # ============================================================================
 # Request/Response Schemas
