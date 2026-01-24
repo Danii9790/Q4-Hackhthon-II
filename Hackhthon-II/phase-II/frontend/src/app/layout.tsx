@@ -8,7 +8,7 @@
  * - Better Auth session provider
  * - Global error boundary for error handling
  */
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -22,7 +22,15 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Todo App',
   description: 'Multi-user task management application',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=5',
+};
+
+/**
+ * Viewport configuration for Next.js 15.
+ */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 /**

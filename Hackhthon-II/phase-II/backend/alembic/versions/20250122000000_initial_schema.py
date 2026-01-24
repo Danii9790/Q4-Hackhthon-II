@@ -42,33 +42,41 @@ def upgrade() -> None:
     - Tasks: user_id, completed (for filtering), user_id+completed (composite)
     """
 
-    # Create users table
-    op.create_table(
-        'users',
-        sa.Column('id', sa.String(), primary_key=True),
-        sa.Column('email', sa.String(), unique=True, nullable=False),
-        sa.Column('password_hash', sa.String(), nullable=True),
-        sa.Column('name', sa.String(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-    )
-    op.create_index('ix_users_email', 'users', ['email'], unique=True)
-    op.create_index('ix_users_id', 'users', ['id'])
+    # Get the database connection
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
 
-    # Create tasks table
-    op.create_table(
-        'tasks',
-        sa.Column('id', sa.Integer(), autoincrement=True, primary_key=True),
-        sa.Column('user_id', sa.String(), nullable=False),
-        sa.Column('title', sa.String(length=200), nullable=False),
-        sa.Column('description', sa.String(length=1000), nullable=True),
-        sa.Column('completed', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    )
-    op.create_index('ix_tasks_user_id', 'tasks', ['user_id'])
-    op.create_index('ix_tasks_completed', 'tasks', ['completed'])
-    op.create_index('ix_tasks_user_id_completed', 'tasks', ['user_id', 'completed'])
+    # Check if users table already exists
+    if not inspector.has_table('users'):
+        # Create users table
+        op.create_table(
+            'users',
+            sa.Column('id', sa.String(), primary_key=True),
+            sa.Column('email', sa.String(), unique=True, nullable=False),
+            sa.Column('password_hash', sa.String(), nullable=True),
+            sa.Column('name', sa.String(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        )
+        op.create_index('ix_users_email', 'users', ['email'], unique=True)
+        op.create_index('ix_users_id', 'users', ['id'])
+
+    # Check if tasks table already exists
+    if not inspector.has_table('tasks'):
+        # Create tasks table
+        op.create_table(
+            'tasks',
+            sa.Column('id', sa.Integer(), autoincrement=True, primary_key=True),
+            sa.Column('user_id', sa.String(), nullable=False),
+            sa.Column('title', sa.String(length=200), nullable=False),
+            sa.Column('description', sa.String(length=1000), nullable=True),
+            sa.Column('completed', sa.Boolean(), nullable=False, server_default='false'),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        )
+        op.create_index('ix_tasks_user_id', 'tasks', ['user_id'])
+        op.create_index('ix_tasks_completed', 'tasks', ['completed'])
+        op.create_index('ix_tasks_user_id_completed', 'tasks', ['user_id', 'completed'])
 
 
 def downgrade() -> None:
