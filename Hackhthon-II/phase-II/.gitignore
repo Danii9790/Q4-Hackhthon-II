@@ -15,6 +15,7 @@ build/
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # Build outputs
 .next/
@@ -28,10 +29,15 @@ build/
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
 .DS_Store
+
+# Development
+.specify/
+history/
 
 # Testing
 .pytest_cache/
