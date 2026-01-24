@@ -429,8 +429,12 @@ async def update_user_task(
     )
 
 
-@router.delete(
-    "/tasks/{task_id}",
+# ============================================================================
+# Task Completion Endpoints (without user_id in path)
+# ============================================================================
+
+@task_router.delete(
+    "/{task_id}",
     response_model=DeleteTaskResponse,
     status_code=status.HTTP_200_OK,
     responses={
