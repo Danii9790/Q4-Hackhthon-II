@@ -8,10 +8,9 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from jose import jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,9 +25,6 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 SECRET_KEY = os.getenv("BETTER_AUTH_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
-
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTP Basic for initial credentials
 security = HTTPBasic()
@@ -179,8 +175,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     Returns:
         True if password matches, False otherwise
+
+    Note:
+        Bcrypt has a 72-byte limit, so we truncate passwords before hashing.
+        This is safe as bcrypt only uses the first 72 bytes anyway.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    # Truncate to 72 bytes (bcrypt limit)
+    password_bytes = plain_password.encode('utf-8')[:72]
+    return bcrypt.checkpw(password_bytes, hashed_password.encode('utf-8'))
 
 
 def get_password_hash(password: str) -> str:
@@ -192,8 +194,15 @@ def get_password_hash(password: str) -> str:
 
     Returns:
         Hashed password suitable for database storage
+
+    Note:
+        Bcrypt has a 72-byte limit, so we truncate passwords before hashing.
+        This is safe as bcrypt only uses the first 72 bytes anyway.
     """
-    return pwd_context.hash(password)
+    # Truncate to 72 bytes (bcrypt limit)
+    password_bytes = password.encode('utf-8')[:72]
+    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=12))
+    return hashed.decode('utf-8')
 
 
 # ============================================================================
