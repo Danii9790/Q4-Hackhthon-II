@@ -441,7 +441,6 @@ async def update_user_task(
     }
 )
 async def delete_user_task(
-    user_id: str,
     task_id: int,
     authenticated_user_id: Annotated[str, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -451,12 +450,10 @@ async def delete_user_task(
 
     This endpoint:
     1. Verifies JWT authentication
-    2. Verifies user_id matches authenticated user
-    3. Verifies task exists and belongs to the user
-    4. Deletes the task from the database
+    2. Verifies task exists and belongs to the authenticated user
+    3. Deletes the task from the database
 
     Args:
-        user_id: User ID from URL path
         task_id: Task ID from URL path
         authenticated_user_id: User ID from JWT token (injected by dependency)
         session: Database session (injected by dependency)
@@ -466,17 +463,14 @@ async def delete_user_task(
 
     Raises:
         HTTPException 401: If authentication fails
-        HTTPException 403: If user_id doesn't match authenticated user or task doesn't belong to user
+        HTTPException 403: If task doesn't belong to user
         HTTPException 404: If task not found
         HTTPException 500: If server error occurs
     """
-    # Verify user owns this resource
-    verify_user_access(authenticated_user_id, user_id)
-
     # Delete task via service layer (includes ownership check)
     delete_task(
         task_id=task_id,
-        user_id=user_id,
+        user_id=authenticated_user_id,
         session=session
     )
 
