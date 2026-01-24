@@ -181,8 +181,8 @@ export default function DashboardPage() {
     const checkAuth = () => {
       if (typeof window === 'undefined') return
 
-      const token = localStorage.getItem('auth_token')
-      const userDataStr = localStorage.getItem('user_data')
+      const token = localStorage.getItem('better-auth.session_token')
+      const userDataStr = localStorage.getItem('better-auth.user_data')
 
       if (!token) {
         router.push('/login')
