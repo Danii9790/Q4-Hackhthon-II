@@ -2,7 +2,7 @@
  * Axios API client for Todo Application.
  *
  * This module provides a typed HTTP client for communicating with the backend API.
- * It automatically includes JWT tokens from Better Auth session and handles 401 errors.
+ * It automatically includes JWT tokens from authentication session and handles 401 errors.
  */
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
@@ -12,6 +12,7 @@ import type {
   TaskUpdateRequest,
   TaskListResponse,
 } from '@/types/task';
+import { getAuthToken, getCurrentUser, clearSession } from '@/lib/auth';
 
 /**
  * Create configured Axios instance with base URL from environment.
@@ -26,19 +27,17 @@ const apiClient: AxiosInstance = axios.create({
 });
 
 /**
- * Request interceptor to attach JWT token from localStorage.
+ * Request interceptor to attach JWT token from session.
  *
  * This interceptor runs before every request and adds the Authorization header
- * with the Bearer token stored in localStorage after login/signup.
+ * with the Bearer token stored by the auth utilities.
  */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Get token from localStorage (stored by login/signup forms)
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+    // Get token from auth utilities (stored by login/signup flows)
+    const token = getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;
@@ -52,7 +51,7 @@ apiClient.interceptors.request.use(
  * Response interceptor to handle 401 errors.
  *
  * When a 401 Unauthorized response is received, this interceptor:
- * - Clears the invalid token from localStorage
+ * - Clears the invalid session data using auth utilities
  * - Redirects to the login page
  *
  * This can happen when:
@@ -64,12 +63,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Clear the invalid session data from localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user_data');
+      // Clear the invalid session data using auth utilities
+      clearSession();
 
-        // Redirect to login if not already there
+      // Redirect to login if not already there
+      if (typeof window !== 'undefined') {
         const currentPath = window.location.pathname;
         if (currentPath !== '/login') {
           window.location.href = '/login';
@@ -82,23 +80,13 @@ apiClient.interceptors.response.use(
 );
 
 /**
- * Get the current user ID from localStorage.
+ * Get the current user ID from session.
  *
  * @returns User ID or null if not found
  */
 function getCurrentUserId(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const userData = localStorage.getItem('user_data');
-    if (!userData) return null;
-
-    const user = JSON.parse(userData);
-    return user?.id || null;
-  } catch (error) {
-    console.error('Failed to get user ID from localStorage:', error);
-    return null;
-  }
+  const user = getCurrentUser();
+  return user?.id || null;
 }
 
 /**

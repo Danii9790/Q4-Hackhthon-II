@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { fadeInUp, scaleIn } from '@/lib/animations'
-import axios from 'axios'
+import { auth } from '@/lib/auth'
 
 interface LoginFormData {
   email: string
@@ -73,37 +73,16 @@ export default function LoginForm() {
     setIsLoading(true)
 
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/signin`,
-        {
-          email: formData.email,
-          password: formData.password,
-        }
-      )
+      // Use auth.signIn which integrates with FastAPI backend
+      await auth.signIn(formData.email, formData.password)
 
-      const { token, user } = response.data
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', token)
-        localStorage.setItem('user_data', JSON.stringify(user))
-      }
-
+      // Redirect to dashboard on successful login
       router.push('/dashboard')
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status
-        const detail = error.response?.data?.detail
+      // Extract error message
+      const message = error instanceof Error ? error.message : 'Invalid email or password'
 
-        if (status === 401) {
-          setErrors({ general: detail?.message || 'Invalid email or password' })
-        } else if (status === 400) {
-          setErrors({ general: detail?.message || 'Invalid request data' })
-        } else {
-          setErrors({ general: 'An error occurred. Please try again later.' })
-        }
-      } else {
-        setErrors({ general: 'An unexpected error occurred. Please try again.' })
-      }
+      setErrors({ general: message })
     } finally {
       setIsLoading(false)
     }
