@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from src.api.dependencies import get_current_user
+from src.api.dependencies import get_current_user_id
 from src.db import get_session
 from src.models.task import Task
 from src.services.task import create_task, list_tasks, get_task, update_task, complete_task, uncomplete_task, delete_task
@@ -162,7 +162,7 @@ def verify_user_access(authenticated_user_id: str, requested_user_id: str) -> No
 )
 async def get_user_tasks(
     user_id: str,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     offset: Annotated[int, Query(ge=0, description="Number of tasks to skip")] = 0,
     limit: Annotated[int, Query(ge=1, le=100, description="Max number of tasks to return")] = 50,
     session: Annotated[Session, Depends(get_session)] = None
@@ -238,7 +238,7 @@ async def get_user_tasks(
 async def create_user_task(
     user_id: str,
     request: TaskCreateRequest,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
     """
@@ -302,7 +302,7 @@ async def create_user_task(
 async def get_user_task(
     user_id: str,
     task_id: int,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
     """
@@ -366,7 +366,7 @@ async def update_user_task(
     user_id: str,
     task_id: int,
     request: TaskUpdateRequest,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
     """
@@ -446,7 +446,7 @@ async def update_user_task(
 )
 async def delete_user_task(
     task_id: int,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> DeleteTaskResponse:
     """
@@ -500,7 +500,7 @@ async def delete_user_task(
 )
 async def complete_task_endpoint(
     task_id: int,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
     """
@@ -558,7 +558,7 @@ async def complete_task_endpoint(
 )
 async def uncomplete_task_endpoint(
     task_id: int,
-    authenticated_user_id: Annotated[str, Depends(get_current_user)],
+    authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
     """
