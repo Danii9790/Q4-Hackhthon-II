@@ -1,0 +1,326 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     MCP TO OPENAI ADAPTER ARCHITECTURE                       │
+│                         Task T032 Implementation                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                         USER REQUEST                                 │    │
+│  │                     "Add a task to buy groceries"                   │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                        │
+│                                    ▼                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                      FASTAPI CHAT ENDPOINT                           │    │
+│  │  • Authenticates user (JWT)                                         │    │
+│  │  • Extracts user_id from token                                      │    │
+│  │  • Loads conversation history                                       │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                        │
+│                                    ▼                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                       OPENAI AGENTS SDK                              │    │
+│  │  ┌─────────────────────────────────────────────────────────────┐    │    │
+│  │  │                        Agent                                 │    │    │
+│  │  │  • Instructions: "Help users manage tasks"                   │    │    │
+│  │  │  • Tools: [add_task_openai]                                 │    │    │
+│  │  │  • Model: gpt-4o-mini                                        │    │    │
+│  │  └─────────────────────────────────────────────────────────────┘    │    │
+│  │                                    │                                │    │
+│  │                                    ▼                                │    │
+│  │  ┌─────────────────────────────────────────────────────────────┐    │    │
+│  │  │                    FUNCTION CALL                             │    │    │
+│  │  │  Agent decides to call: add_task_openai                      │    │    │
+│  │  │  Parameters: {user_id, title, description}                   │    │    │
+│  │  └─────────────────────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                        │
+│                                    ▼                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    MCP TO OPENAI ADAPTER                            │    │
+│  │  (File: src/services/mcp_openai_adapter.py)                         │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  add_task_openai() - @function_tool                       │      │    │
+│  │  │  • Wraps MCP AddTaskTool                                  │      │    │
+│  │  │  • Injects user_id from context                           │      │    │
+│  │  │  • Calls MCP tool.execute()                               │      │    │
+│  │  │  • Formats response for agent                             │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  MCPToolRegistry                                         │      │    │
+│  │  │  • Stores tool schemas + instances                        │      │    │
+│  │  │  • Prevents duplicate registration                        │      │    │
+│  │  │  • Provides tool discovery API                            │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  convert_mcp_schema_to_openai()                          │      │    │
+│  │  │  MCP Schema ───► OpenAI Function Format                   │      │    │
+│  │  │  • Transforms inputSchema to parameters                   │      │    │
+│  │  │  • Preserves type constraints                            │      │    │
+│  │  │  • Adds required fields                                  │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  convert_openai_response_to_mcp()                        │      │    │
+│  │  │  OpenAI Response ───► MCP Format                          │      │    │
+│  │  │  • Detects success/error strings                         │      │    │
+│  │  │  • Standardizes to {success, message, data}              │      │    │
+│  │  │  • Pass-through for MCP dicts                            │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  mcp_tool_error_handler()                                │      │    │
+│  │  │  • Catches TaskValidationError                           │      │    │
+│  │  │  • Catches ValidationError, PermissionError               │      │    │
+│  │  │  • Returns user-friendly error messages                  │      │    │
+│  │  │  • Logs detailed errors for debugging                    │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                        │
+│                                    ▼                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                        MCP TOOLS LAYER                              │    │
+│  │  (File: src/mcp_tools/add_task.py)                                  │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  AddTaskTool extends BaseMCPTool                         │      │    │
+│  │  │  • validate_title()                                       │      │    │
+│  │  │  • validate_description()                                 │      │    │
+│  │  │  • execute(user_id, title, description)                   │      │    │
+│  │  │  • Returns: {success, message, data}                      │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  │                                                                      │    │
+│  │  ┌──────────────────────────────────────────────────────────┐      │    │
+│  │  │  ADD_TASK_SCHEMA (MCP Format)                            │      │    │
+│  │  │  {                                                        │      │    │
+│  │  │    "name": "add_task",                                   │      │    │
+│  │  │    "description": "Create a new task...",                │      │    │
+│  │  │    "inputSchema": {                                       │      │    │
+│  │  │      "type": "object",                                   │      │    │
+│  │  │      "properties": {                                      │      │    │
+│  │  │        "user_id": {"type": "string", "format": "uuid"},  │      │    │
+│  │  │        "title": {"type": "string", "maxLength": 500},    │      │    │
+│  │  │        "description": {"type": "string", "maxLength": 5000}│     │    │
+│  │  │      },                                                   │      │    │
+│  │  │      "required": ["user_id", "title"]                     │      │    │
+│  │  │    }                                                      │      │    │
+│  │  │  }                                                        │      │    │
+│  │  └──────────────────────────────────────────────────────────┘      │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                        │
+│                                    ▼                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                       DATABASE LAYER                                │    │
+│  │  • PostgreSQL (via Neon)                                            │    │
+│  │  • SQLModel ORM                                                     │    │
+│  │  • AsyncSession for async operations                                │    │
+│  │                                                                      │    │
+│  │  Table: tasks                                                       │    │
+│  │  ┌──────────────────────────────────────────────────────┐           │    │
+│  │  │  id (PK) │ user_id (FK) │ title │ description │ completed│       │    │
+│  │  ├──────────────────────────────────────────────────────┤           │    │
+│  │  │    1     │ 550e84...     │ Buy...│ Milk, egg... │   false   │       │    │
+│  │  └──────────────────────────────────────────────────────┘           │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          DATA FLOW DIAGRAM                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+USER INPUT
+    │
+    ▼
+┌─────────────────┐
+│   FastAPI       │ 1. Receive user message
+│   Endpoint      │ 2. Authenticate with JWT
+│                 │ 3. Extract user_id
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Load Agent    │ 1. Get agent instance
+│   + Tools       │ 2. Load registered tools
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Agent Run     │ 1. Process user message
+│   (OpenAI)      │ 2. Decide to call add_task
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│            MCP TO OPENAI ADAPTER                            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 1. add_task_openai() invoked                          │  │
+│  │    • Receives: user_id, title, description           │  │
+│  │    • Injects user_id from context                    │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 2. Call MCP Tool                                     │  │
+│  │    tool = AddTaskTool()                              │  │
+│  │    result = await tool.execute(...)                  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 3. MCP Tool Processing                               │  │
+│  │    • validate_title("Buy groceries")                  │  │
+│  │    • validate_description(null)                       │  │
+│  │    • Create Task(title="Buy groceries")               │  │
+│  │    • Insert into database (scoped by user_id)         │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 4. Format Response                                   │  │
+│  │    MCP format: {                                      │  │
+│  │      "success": true,                                 │  │
+│  │      "message": "Task created successfully",          │  │
+│  │      "data": {id: 1, title: "Buy groceries", ...}     │  │
+│  │    }                                                  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ 5. Return to Agent                                   │  │
+│  │    String: "Task created successfully!               │  │
+│  │             Title: Buy groceries                      │  │
+│  │             ID: 1"                                    │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Agent         │ 1. Process tool result
+│   Response      │ 2. Generate natural language response
+│                 │    "I've created a task called 'Buy groceries' for you."
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Return to     │ JSON: {
+│   User          │   "assistant_message": "I've created a task...",
+│                 │   "tool_calls": [{
+│                 │     "tool_name": "add_task",
+│                 │     "result": "Task created successfully!"
+│                 │   }]
+│                 │ }
+└─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    SCHEMA TRANSFORMATION EXAMPLE                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+MCP SCHEMA (from ADD_TASK_SCHEMA):
+{
+  "name": "add_task",
+  "description": "Create a new task for the user",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "user_id": {"type": "string", "format": "uuid"},
+      "title": {"type": "string", "minLength": 1, "maxLength": 500},
+      "description": {"type": "string", "maxLength": 5000}
+    },
+    "required": ["user_id", "title"]
+  }
+}
+           │
+           ▼ convert_mcp_schema_to_openai()
+           │
+OPENAI FUNCTION FORMAT:
+{
+  "type": "function",
+  "function": {
+    "name": "add_task",
+    "description": "Create a new task for the user",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": {"type": "string", "format": "uuid"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "description": {"type": "string", "maxLength": 5000}
+      },
+      "required": ["user_id", "title"]
+    }
+  }
+}
+           │
+           │ Used by OpenAI Agents SDK for function calling
+           ▼
+AGENT FUNCTION TOOL:
+@function_tool
+async def add_task_openai(
+  user_id: str,
+  title: str,
+  description: Optional[str] = None
+) -> str:
+  """Create a new task for the user"""
+  # Implementation...
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      EXTENSIBILITY PATTERN                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+To add new MCP tools (list_tasks, complete_task, etc.):
+
+STEP 1: Create MCP Tool (src/mcp_tools/list_tasks.py)
+────────────────────────────────────────────────────────
+class ListTasksTool(BaseMCPTool):
+    tool_name = "list_tasks"
+    tool_description = "List all tasks for the user"
+    # ... implementation ...
+
+LIST_TASKS_SCHEMA = {
+    "name": "list_tasks",
+    "description": "...",
+    "inputSchema": {...}
+}
+
+STEP 2: Create OpenAI Function Wrapper (mcp_openai_adapter.py)
+───────────────────────────────────────────────────────────────
+@function_tool(
+    name_override="list_tasks",
+    failure_error_function=mcp_tool_error_handler
+)
+async def list_tasks_openai(
+    user_id: str,
+    status: str = "all"
+) -> str:
+    """List all tasks for the user"""
+    tool = ListTasksTool()
+    result = await tool.execute(user_id=user_id, status=status)
+    return format_response(result)
+
+STEP 3: Register with Global Registry
+─────────────────────────────────────────
+tool_registry.register_tool(
+    "list_tasks",
+    LIST_TASKS_SCHEMA,
+    ListTasksTool()
+)
+
+STEP 4: Add to Agent
+────────────────────
+agent = Agent(
+    name="TodoAssistant",
+    tools=[
+        add_task_openai,
+        list_tasks_openai,  # ← New tool
+        # Future: complete_task_openai, update_task_openai, etc.
+    ]
+)
+
+✓ No changes needed to adapter functions
+✓ Conversion logic works for any tool
+✓ Registry pattern allows unlimited tools
+✓ Error handler works for all tools

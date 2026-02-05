@@ -1,0 +1,913 @@
+"""
+Agent Service for Todo AI Chatbot.
+
+Provides the core agent execution logic using OpenAI Agents SDK.
+Handles conversation context, tool invocations, and response generation.
+All functions follow async patterns for optimal performance.
+
+This module implements:
+- T030: Agent Configuration with task creation intent interpretation
+- T040: Task viewing intent interpretation patterns (list_tasks)
+- T042: Conversational task list formatting
+- T043: Empty task list handling with context-aware messages
+"""
+
+import asyncio
+from logging import getLogger
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+from agents import Agent, AgentBase, Runner, RunContextWrapper
+from agents.function_tool import function_tool
+from openai import AsyncOpenAI
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.api.chat import (
+    fetch_conversation_history,
+    format_messages_for_agent,
+    truncate_history_to_max,
+)
+from src.models import Message
+from src.mcp_tools.add_task import add_task, ADD_TASK_SCHEMA, AddTaskTool, TaskValidationError
+from src.mcp_tools.list_tasks import list_tasks, LIST_TASKS_SCHEMA, ListTasksTool, TaskListValidationError
+
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+# Configure logging
+logger = getLogger(__name__)
+
+# Agent configuration
+DEFAULT_MODEL = "gpt-4o-mini"  # Cost-effective, fast, good for function calling
+AGENT_TIMEOUT = 30.0  # seconds - maximum time for agent execution
+MAX_CONTEXT_TOKENS = 8000  # Maximum conversation history tokens
+
+# Model settings for deterministic responses
+# Temperature 0 ensures consistent intent interpretation and tool selection
+AGENT_TEMPERATURE = 0.0
+MAX_TOKENS = 500  # Maximum tokens in agent response
+
+
+# ============================================================================
+# Agent System Instructions (T030 Implementation)
+# ============================================================================
+
+AGENT_INSTRUCTIONS = """
+You are a friendly task management assistant for the Todo AI Chatbot.
+
+Your primary role is to help users manage their tasks through natural language conversation.
+You interpret what users want to do and use the appropriate tools to accomplish their goals.
+
+## Core Behavior Principles
+
+1. **Natural Language First**: Users speak conversationally, not with commands
+   - "Add a task to buy groceries" → Create a task with title "Buy groceries"
+   - "Remind me to call the dentist tomorrow" → Create task with title "Call dentist"
+   - "I need to finish the report by Friday" → Create task with title and description
+
+2. **Extract Task Details**: Pull out the key information from user messages
+   - **Title**: What is the main task? (required, max 500 characters)
+   - **Description**: Any additional context, deadlines, or details? (optional, max 5000 chars)
+
+3. **Be Friendly and Conversational**: Respond like a helpful assistant
+   - "I've created a task called 'Buy groceries' for you!"
+   - "Got it! I've added 'Call dentist' to your tasks."
+   - "Task added! Is there anything else you'd like to track?"
+
+4. **Handle Ambiguity**: If the user's intent is unclear, ask clarifying questions
+   - "I'd be happy to help! What task would you like me to add?"
+   - "Could you tell me more about what you need to track?"
+
+5. **Empty Task List Handling**: Provide encouraging, context-aware messages when task lists are empty (T043)
+   - When viewing ALL tasks and list is empty:
+     → "You don't have any tasks yet. Would you like to create one?"
+   - When viewing PENDING tasks and list is empty:
+     → "Great job! You've completed all your tasks! 🎉"
+   - When viewing COMPLETED tasks and list is empty:
+     → "You haven't completed any tasks yet. Keep going!"
+   - Always be encouraging and suggest next steps when appropriate
+   - The list_tasks tool will return an empty array when no tasks match the filter
+   - Detect empty arrays and respond with the appropriate friendly message
+   - Never just say "no tasks" - be conversational and helpful
+
+## Task Creation Intent Patterns
+
+You should recognize the following patterns as task creation requests:
+
+**Explicit Task Creation:**
+- "Add a task to [task]"
+- "Create a task for [task]"
+- "Add [task] to my todo list"
+- "Create a reminder to [task]"
+- "Add todo: [task]"
+- "New task: [task]"
+
+**Implicit Task Creation:**
+- "I need to [task]"
+- "Don't let me forget to [task]"
+- "Remind me to [task]"
+- "I have to [task]"
+- "Need to remember to [task]"
+- "[Task] needs to get done"
+
+**Deadline-Based Task Creation:**
+- "Call the dentist tomorrow at 3pm"
+  → Title: "Call dentist"
+  → Description: "Tomorrow at 3pm"
+- "Finish the report by Friday"
+  → Title: "Finish the report"
+  → Description: "Due by Friday"
+- "Meeting with John next Monday"
+  → Title: "Meeting with John"
+  → Description: "Next Monday"
+
+## When to Use the add_task Tool
+
+Call the `add_task_tool` function when:
+1. User explicitly asks to create/add a task
+2. User expresses something they need to do or remember
+3. User mentions a future obligation or deadline
+
+**NEVER call add_task_tool when:**
+- User is asking to view/show/list tasks (use list_tasks tool)
+- User wants to mark something as done (different tool)
+- User wants to modify/delete an existing task (different tool)
+- User is just chatting without expressing a task need
+
+## Task Viewing Intent Patterns (T040)
+
+You should recognize the following patterns as task viewing requests:
+
+**General Task Viewing (Status: All):**
+- "Show my tasks"
+- "What are my tasks?"
+- "List all my tasks"
+- "What's on my todo list?"
+- "Show me everything"
+- "What do I have to do?"
+- "My tasks"
+- "Tasks"
+
+**Pending Task Viewing (Status: Pending):**
+- "What's pending?"
+- "What's left to do?"
+- "Show my pending tasks"
+- "What do I need to do?"
+- "What's incomplete?"
+- "What remains?"
+- "Show tasks I haven't finished"
+- "What do I still need to do?"
+
+**Completed Task Viewing (Status: Completed):**
+- "What have I completed?"
+- "Show my completed tasks"
+- "What did I finish?"
+- "What's done?"
+- "Show finished tasks"
+- "What did I accomplish?"
+- "What have I done?"
+
+## Status Parameter Selection for list_tasks
+
+When calling the `list_tasks_tool`, determine the appropriate status parameter based on user intent:
+
+**Use status="all" when:**
+- User asks to see "all tasks", "everything", "my tasks"
+- No specific filter is mentioned
+- User wants a complete overview
+- Examples: "Show my tasks", "What do I have to do?", "List all tasks"
+
+**Use status="pending" when:**
+- User asks about incomplete, remaining, or unfinished tasks
+- Words like "pending", "left to do", "incomplete", "not done" are used
+- User wants to know what they still need to work on
+- Examples: "What's pending?", "What's left?", "Show my incomplete tasks"
+
+**Use status="completed" when:**
+- User asks about finished or accomplished tasks
+- Words like "completed", "finished", "done", "accomplished" are used
+- User wants a summary of what they've achieved
+- Examples: "What have I completed?", "Show finished tasks", "What did I do?"
+
+**Default behavior:**
+- If the user just says "show tasks" without qualification, default to status="all"
+- If uncertain about status, ask for clarification: "Would you like to see all tasks, just pending ones, or completed ones?"
+
+## When to Use the list_tasks Tool (T040)
+
+Call the `list_tasks_tool` function when:
+1. User explicitly asks to view, show, or list tasks
+2. User asks about what's pending, remaining, or incomplete
+3. User asks about what they've completed or finished
+4. User wants to see their todo list or task overview
+
+**NEVER call list_tasks_tool when:**
+- User is asking to create/add a new task (use add_task_tool)
+- User wants to mark something as done (different tool)
+- User wants to modify/delete an existing task (different tool)
+- User is just chatting without expressing a viewing intent
+
+## Task List Response Formatting (T042)
+
+After successfully retrieving tasks via list_tasks_tool, format the response conversationally:
+
+**For populated lists:**
+1. Provide a friendly summary: "You have X tasks:"
+2. List tasks in readable format (not raw data dumps)
+3. Use bullets or numbered lists for clarity
+4. Include task status indicators (completed/pending)
+5. Keep descriptions concise if present
+6. For 25+ tasks, summarize: "You have X tasks total. Here are the most recent ones:"
+
+**Example responses:**
+- "You have 3 tasks:
+1. Buy groceries (pending)
+2. Call dentist (pending)
+3. Finish report (due by Friday)"
+- "Here's what's pending: You have 2 incomplete tasks.
+• Call dentist tomorrow at 3pm
+• Finish the report by Friday"
+- "You've completed 3 tasks! Great job! Here's what you accomplished:
+1. Buy groceries
+2. Schedule meeting
+3. Send email"
+
+**For empty lists (T043):**
+- Use the context-aware messages from "Empty Task List Handling" section
+- Detect empty arrays from list_tasks_tool response
+- Respond with the appropriate friendly message based on status filter
+
+## Tool Use Parameters
+
+When calling `add_task_tool`:
+- **title**: Extract the main task action or object (required)
+  - Max 500 characters
+  - Must be non-empty after stripping whitespace
+  - Be concise but descriptive
+- **description**: Additional context, deadlines, or details (optional)
+  - Max 5000 characters
+  - Include timing, deadlines, location, or other specifics
+  - Omit if no additional context provided
+
+## Response Format
+
+After successfully creating a task, respond with:
+1. Confirmation that the task was created
+2. Echo back the task title for verification
+3. Brief mention of any description/details if provided
+4. Offer to help with additional tasks
+
+**Example responses:**
+- "I've added 'Buy groceries' to your tasks!"
+- "Task created! 'Call dentist' is now on your list for tomorrow at 3pm."
+- "Got it! I've created 'Finish the report' (due by Friday). Anything else?"
+
+## Error Handling
+
+If the add_task_tool fails:
+1. Explain the issue in user-friendly terms
+2. Don't expose technical error messages
+3. Suggest how to fix the problem
+4. Offer to try again with corrected input
+
+**Example error responses:**
+- "I couldn't create that task because the title was too long. Could you shorten it a bit?"
+- "Something went wrong on my end. Could you try rephrasing that?"
+
+## Tone and Style
+
+- **Friendly and casual**: Like a helpful assistant, not a robot
+- **Concise responses**: Get to the point, don't over-explain
+- **Action-oriented**: Focus on what you did or what you need
+- **Positive reinforcement**: Acknowledge completed actions, celebrate progress
+- **Proactive help**: Offer next steps when appropriate
+
+**Remember**: Your goal is to make task management feel effortless through natural conversation.
+The user shouldn't need to learn commands or syntax - they should just be able to talk to you.
+"""
+
+
+# ============================================================================
+# Task List Formatting (T042 & T043 Implementation)
+# ============================================================================
+
+def format_task_list_for_display(tasks: List[Dict[str, Any]], status: str = "all") -> str:
+    """
+    Format task list for conversational display to the user.
+
+    This function transforms raw task data into friendly, readable output.
+    It handles empty lists with context-aware messages (T043) and formats
+    populated lists in a conversational style (T042).
+
+    Args:
+        tasks: List of task dictionaries with keys: id, title, description, completed
+        status: Filter type used - "all", "pending", or "completed"
+
+    Returns:
+        str: Formatted task list ready for display in chat
+
+    Examples:
+        >>> tasks = [{"id": 1, "title": "Buy groceries", "completed": False}]
+        >>> format_task_list_for_display(tasks, "pending")
+        "Here's what you have pending:\\n\\n1. Buy groceries"
+
+        >>> tasks = []
+        >>> format_task_list_for_display(tasks, "all")
+        "You don't have any tasks yet. Would you like to create one?"
+
+        >>> tasks = []
+        >>> format_task_list_for_display(tasks, "pending")
+        "Great job! You've completed all your tasks! 🎉"
+    """
+    # Handle empty lists with context-aware messages (T043)
+    if not tasks:
+        if status == "all":
+            return "You don't have any tasks yet. Would you like to create one?"
+        elif status == "pending":
+            return "Great job! You've completed all your tasks! 🎉"
+        elif status == "completed":
+            return "You haven't completed any tasks yet. Keep going!"
+        else:
+            # Fallback for unknown status
+            return "You don't have any tasks yet."
+
+    # Determine preamble based on status filter
+    if status == "all":
+        preamble = "Here are all your tasks:\n\n"
+    elif status == "pending":
+        preamble = "Here's what you have pending:\n\n"
+    elif status == "completed":
+        preamble = "Here's what you've completed:\n\n"
+    else:
+        preamble = "Here are your tasks:\n\n"
+
+    # Format each task (T042 - conversational format, not raw data dump)
+    formatted_tasks = []
+    for i, task in enumerate(tasks, start=1):
+        title = task.get("title", "Untitled Task")
+        task_id = task.get("id", "?")
+        completed = task.get("completed", False)
+        description = task.get("description")
+
+        # Build task entry
+        status_indicator = "✓" if completed else "○"
+        task_entry = f"{i}. {status_indicator} {title}"
+
+        # Add description if present
+        if description:
+            task_entry += f"\n   {description}"
+
+        # Add task ID in parentheses for reference
+        task_entry += f" (ID: {task_id})"
+
+        formatted_tasks.append(task_entry)
+
+    # Combine preamble with formatted tasks
+    return preamble + "\n".join(formatted_tasks)
+
+
+# ============================================================================
+# MCP to OpenAI Adapter Layer (T032 Preview - Foundation for Tool Integration)
+# ============================================================================
+
+class MCPToolRegistry:
+    """
+    Centralized registry for MCP tools exposed to OpenAI agents.
+
+    This class maintains a mapping of MCP tool names to their implementations
+    and provides a clean interface for registering and retrieving tools.
+
+    Design Rationale:
+    - Separation of concerns: MCP tools remain independent of agent framework
+    - Extensibility: New tools can be added without modifying agent code
+    - Testability: Registry can be mocked for unit testing
+
+    Usage:
+        >>> registry = MCPToolRegistry()
+        >>> registry.register_tool("add_task", ADD_TASK_SCHEMA, AddTaskTool())
+        >>> tools = registry.list_tools()
+    """
+
+    def __init__(self):
+        """Initialize the tool registry with empty tool map."""
+        self._tools: Dict[str, Dict[str, Any]] = {}
+        logger.info("MCPToolRegistry initialized")
+
+    def register_tool(
+        self,
+        tool_name: str,
+        mcp_schema: Dict[str, Any],
+        mcp_tool_instance: Any
+    ) -> None:
+        """
+        Register an MCP tool with its schema and implementation.
+
+        Args:
+            tool_name: Unique identifier for the tool (e.g., "add_task")
+            mcp_schema: MCP tool schema dict with name, description, inputSchema
+            mcp_tool_instance: Instance of the MCP tool class (e.g., AddTaskTool())
+
+        Raises:
+            ValueError: If tool_name is already registered
+
+        Example:
+            >>> registry = MCPToolRegistry()
+            >>> registry.register_tool("add_task", ADD_TASK_SCHEMA, AddTaskTool())
+        """
+        if tool_name in self._tools:
+            raise ValueError(f"Tool '{tool_name}' is already registered")
+
+        self._tools[tool_name] = {
+            "schema": mcp_schema,
+            "instance": mcp_tool_instance
+        }
+        logger.info(f"Registered MCP tool: {tool_name}")
+
+    def get_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve tool registration by name.
+
+        Args:
+            tool_name: Name of the tool to retrieve
+
+        Returns:
+            Dict with 'schema' and 'instance' keys, or None if not found
+
+        Example:
+            >>> tool = registry.get_tool("add_task")
+            >>> instance = tool["instance"]
+        """
+        return self._tools.get(tool_name)
+
+    def list_tools(self) -> List[str]:
+        """
+        List names of all registered tools.
+
+        Returns:
+            List of tool names
+
+        Example:
+            >>> registry.list_tools()
+            ['add_task', 'list_tasks', 'complete_task']
+        """
+        return list(self._tools.keys())
+
+
+# ============================================================================
+# Global Tool Registry Instance
+# ============================================================================
+
+# Create a singleton registry for the application
+tool_registry = MCPToolRegistry()
+
+# Register the add_task tool
+tool_registry.register_tool("add_task", ADD_TASK_SCHEMA, AddTaskTool())
+
+# Register the list_tasks tool (T041)
+tool_registry.register_tool("list_tasks", LIST_TASKS_SCHEMA, ListTasksTool())
+
+
+# ============================================================================
+# Agent Setup with Tools
+# ============================================================================
+
+# Create function tool wrapper for add_task MCP tool
+@function_tool
+async def add_task_tool(
+    ctx: RunContextWrapper[Dict[str, Any]],
+    title: str,
+    description: Optional[str] = None
+) -> str:
+    """
+    Create a new task for the user.
+
+    Use this tool when the user wants to add a new task to their todo list.
+    The task will be associated with the user and can be managed through
+    natural language commands.
+
+    **When to use this tool:**
+    - User says "Add a task to buy groceries"
+    - User says "Create a reminder for my meeting"
+    - User says "I need to remember to call John"
+    - User says "Add todo: finish the report"
+
+    Args:
+        title: Task title (required, max 500 characters, must not be empty)
+        description: Optional detailed task description (max 5000 characters)
+
+    Returns:
+        str: Result message describing the created task
+
+    Examples:
+        User says: "Add a task to buy groceries"
+        Agent calls: add_task_tool(title="Buy groceries")
+
+        User says: "Remind me to call the dentist tomorrow at 3pm"
+        Agent calls: add_task_tool(title="Call dentist", description="Tomorrow at 3pm")
+    """
+    try:
+        # Extract user_id from context
+        user_id = ctx.context.get("user_id")
+        if not user_id:
+            logger.error("user_id not found in agent context")
+            return "Error: Could not identify user for task creation."
+
+        # Call the MCP add_task function
+        result = await add_task(
+            user_id=str(user_id),
+            title=title,
+            description=description
+        )
+
+        if result.get("success"):
+            task_data = result.get("data", {})
+            logger.info(
+                f"Task created via agent: id={task_data.get('id')}, "
+                f"title='{task_data.get('title')[:50]}...', user_id={user_id}"
+            )
+            return (
+                f"Task created successfully: {task_data.get('title')}"
+            )
+        else:
+            logger.error(f"Task creation failed: {result.get('message')}")
+            return f"Failed to create task: {result.get('message')}"
+
+    except Exception as e:
+        logger.error(f"Error in add_task_tool: {str(e)}", exc_info=True)
+        return f"An error occurred while creating the task: {str(e)}"
+
+
+# Create function tool wrapper for list_tasks MCP tool (T041)
+@function_tool
+async def list_tasks_tool(
+    ctx: RunContextWrapper[Dict[str, Any]],
+    status: str = "all"
+) -> str:
+    """
+    List tasks for the user with optional status filtering.
+
+    Use this tool when the user wants to see their tasks. You can filter
+    tasks by completion status (pending, completed) or show all tasks.
+    Tasks are always isolated to the authenticated user.
+
+    **When to use this tool:**
+    - User says "Show my tasks"
+    - User says "What do I have to do?"
+    - User says "What have I completed?"
+    - User says "What's pending?"
+
+    Args:
+        status: Optional status filter - "all" (default), "pending", or "completed"
+
+    Returns:
+        str: Formatted task list with context-aware messages
+
+    Examples:
+        User says: "Show my tasks"
+        Agent calls: list_tasks_tool(status="all")
+
+        User says: "What's pending?"
+        Agent calls: list_tasks_tool(status="pending")
+
+        User says: "Show completed tasks"
+        Agent calls: list_tasks_tool(status="completed")
+    """
+    try:
+        # Extract user_id from context
+        user_id = ctx.context.get("user_id")
+        if not user_id:
+            logger.error("user_id not found in agent context")
+            return "Error: Could not identify user for task listing."
+
+        # Call the MCP list_tasks function
+        result = await list_tasks(
+            user_id=str(user_id),
+            status=status
+        )
+
+        if result.get("success"):
+            tasks_data = result.get("data", [])
+            task_count = len(tasks_data)
+            logger.info(
+                f"Tasks listed via agent: count={task_count}, "
+                f"status={status}, user_id={user_id}"
+            )
+
+            # Format task list for conversational display (T042)
+            formatted_list = format_task_list_for_display(tasks_data, status)
+            return formatted_list
+        else:
+            logger.error(f"Task listing failed: {result.get('message')}")
+            return f"Failed to list tasks: {result.get('message')}"
+
+    except Exception as e:
+        logger.error(f"Error in list_tasks_tool: {str(e)}", exc_info=True)
+        return f"An error occurred while listing tasks: {str(e)}"
+
+
+# Create the primary agent instance
+def create_todo_agent() -> AgentBase:
+    """
+    Create and configure the Todo AI Chatbot agent.
+
+    Initializes the agent with:
+    - Comprehensive instructions for task creation intent interpretation (T030)
+    - Tools for task operations (add_task, list_tasks)
+    - Default model configuration with temperature=0 for deterministic responses
+
+    Agent Configuration Details:
+    - Model: gpt-4o-mini (fast, cost-effective, optimized for function calling)
+    - Temperature: 0.0 (deterministic, consistent tool selection)
+    - Max Tokens: 500 (concise responses)
+    - Tool Use: Enabled with add_task_tool and list_tasks_tool (T041)
+
+    Returns:
+        AgentBase: Configured agent instance ready for execution
+
+    Example:
+        >>> agent = create_todo_agent()
+        >>> result = await execute_agent(user_id, [], "Add a task to buy groceries")
+    """
+    agent = Agent(
+        name="TodoAssistant",
+        instructions=AGENT_INSTRUCTIONS,
+        tools=[add_task_tool, list_tasks_tool],
+    )
+
+    logger.info(
+        "Todo agent created with add_task and list_tasks tools (T041), "
+        f"model={DEFAULT_MODEL}, temperature={AGENT_TEMPERATURE}"
+    )
+    return agent
+
+
+# Global agent instance (reused across requests for efficiency)
+_todo_agent: Optional[AgentBase] = None
+
+
+def get_todo_agent() -> AgentBase:
+    """
+    Get or create the global todo agent instance.
+
+    Uses singleton pattern to avoid recreating the agent on every request.
+    The agent is stateless and safe to reuse across different user contexts.
+
+    Returns:
+        AgentBase: The todo agent instance
+
+    Example:
+        >>> agent = get_todo_agent()
+        >>> result = await Runner.run(agent, "Hello")
+    """
+    global _todo_agent
+    if _todo_agent is None:
+        _todo_agent = create_todo_agent()
+    return _todo_agent
+
+
+# ============================================================================
+# Agent Execution Function (T031 Placeholder)
+# ============================================================================
+
+async def execute_agent(
+    user_id: UUID,
+    conversation_history: List[Message],
+    message: str
+) -> Dict[str, Any]:
+    """
+    Execute the AI agent with conversation context and new user message.
+
+    This is the core agent execution function that:
+    1. Formats conversation history for the OpenAI Agents SDK
+    2. Creates agent context with user_id for data isolation
+    3. Executes the agent with the current message and conversation history
+    4. Processes any tool calls made by the agent (e.g., add_task)
+    5. Returns structured response with assistant message and tool results
+
+    The function handles:
+    - Conversation context loading and formatting
+    - Agent execution with proper error handling
+    - Tool invocation and result processing
+    - Timeout management
+    - Comprehensive logging for debugging
+
+    Args:
+        user_id: Authenticated user's UUID (from JWT token)
+        conversation_history: List of Message objects from database (ordered chronologically)
+        message: Current user message to process
+
+    Returns:
+        Dict with execution results:
+        {
+            "success": True,  # Whether execution succeeded
+            "assistant_message": "The agent's text response to the user",
+            "tool_calls": [  # List of tool calls made during execution
+                {
+                    "tool_name": "add_task",
+                    "arguments": {"title": "Buy groceries", "description": null},
+                    "result": "Task created successfully: Buy groceries"
+                }
+            ],
+            "raw_response": {...},  # Full RunResult object for debugging
+            "error": None  # Error message if execution failed
+        }
+
+    Raises:
+        ValueError: If message is empty or invalid
+        RuntimeError: If agent execution fails after retries
+        asyncio.TimeoutError: If agent execution exceeds timeout
+
+    Example:
+        >>> messages = await fetch_conversation_history(session, conversation_id)
+        >>> result = await execute_agent(user_id, messages, "Add a task to buy milk")
+        >>> print(result["assistant_message"])
+        "I've created a task called 'Buy groceries' for you."
+        >>> print(result["tool_calls"][0]["result"])
+        "Task created successfully: Buy groceries"
+
+    Note:
+        - Conversation history is truncated to MAX_CONTEXT_TOKENS to prevent context overflow
+        - Tool calls are executed in the agent's run loop automatically
+        - User context is passed to tools for data isolation
+        - All database operations are scoped by user_id
+    """
+    # Validate input
+    if not message or not message.strip():
+        logger.error("execute_agent called with empty message")
+        raise ValueError("Message cannot be empty")
+
+    logger.info(
+        f"Executing agent for user_id={user_id}, "
+        f"history_length={len(conversation_history)}, "
+        f"message_length={len(message)}"
+    )
+
+    try:
+        # Step 1: Format conversation history for OpenAI Agents SDK
+        formatted_history = format_messages_for_agent(conversation_history)
+        logger.debug(f"Formatted {len(formatted_history)} messages for agent input")
+
+        # Step 2: Truncate history to fit within context window
+        truncated_history = truncate_history_to_max(
+            formatted_history,
+            max_tokens=MAX_CONTEXT_TOKENS
+        )
+        if len(truncated_history) < len(formatted_history):
+            logger.info(
+                f"Truncated conversation history from {len(formatted_history)} "
+                f"to {len(truncated_history)} messages to fit context window"
+            )
+
+        # Step 3: Create agent context with user_id
+        # This context is passed to tools for data isolation
+        agent_context = {
+            "user_id": str(user_id)
+        }
+        context_wrapper = RunContextWrapper(context=agent_context)
+
+        # Step 4: Get agent instance
+        agent = get_todo_agent()
+        logger.debug("Retrieved todo agent instance")
+
+        # Step 5: Build conversation input for agent
+        # Combine history with current message
+        conversation_input = []
+
+        # Add conversation history (if any)
+        for msg in truncated_history:
+            conversation_input.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+
+        # Add current user message
+        conversation_input.append({
+            "role": "user",
+            "content": message
+        })
+
+        logger.debug(f"Agent input prepared with {len(conversation_input)} total messages")
+
+        # Step 6: Execute agent with timeout protection
+        try:
+            logger.info(f"Running agent with {len(conversation_input)} messages")
+            run_result = await asyncio.wait_for(
+                Runner.run(
+                    agent,
+                    input=conversation_input,
+                    context=context_wrapper,
+                ),
+                timeout=AGENT_TIMEOUT
+            )
+            logger.info(
+                f"Agent execution completed in {run_result.usage.total_requests} request(s)"
+            )
+
+        except asyncio.TimeoutError:
+            logger.error(f"Agent execution exceeded timeout of {AGENT_TIMEOUT}s")
+            raise RuntimeError(
+                f"Agent execution timed out after {AGENT_TIMEOUT} seconds. "
+                "The request took too long to process."
+            )
+
+        # Step 7: Extract tool calls from result
+        tool_calls = []
+        # Iterate through new items to find tool calls
+        for item in run_result.new_items:
+            # Check if item is a tool call (tool calls in Agents SDK appear as specific types)
+            if hasattr(item, 'tool_name'):
+                tool_calls.append({
+                    "tool_name": item.tool_name,
+                    "arguments": getattr(item, 'arguments', {}),
+                    "result": getattr(item, 'output', None)
+                })
+                logger.debug(
+                    f"Tool call detected: {item.tool_name} "
+                    f"-> {getattr(item, 'output', 'No output')[:100]}"
+                )
+
+        # Step 8: Extract final assistant message
+        assistant_message = run_result.final_output
+        if not assistant_message:
+            logger.warning("Agent returned empty final_output, using fallback")
+            assistant_message = "I'm sorry, I couldn't generate a response. Please try again."
+
+        logger.info(
+            f"Agent execution successful: assistant_response_length={len(assistant_message)}, "
+            f"tool_calls_count={len(tool_calls)}"
+        )
+
+        # Step 9: Return structured response
+        return {
+            "success": True,
+            "assistant_message": assistant_message,
+            "tool_calls": tool_calls,
+            "raw_response": run_result,
+            "error": None
+        }
+
+    except ValueError as e:
+        # Re-raise validation errors (empty message, etc.)
+        logger.error(f"Validation error in execute_agent: {str(e)}")
+        raise
+
+    except asyncio.TimeoutError as e:
+        # Timeout errors
+        logger.error(f"Timeout error in execute_agent: {str(e)}")
+        return {
+            "success": False,
+            "assistant_message": (
+                "I'm sorry, processing your request took too long. "
+                "Please try again with a shorter request."
+            ),
+            "tool_calls": [],
+            "raw_response": None,
+            "error": "AGENT_TIMEOUT"
+        }
+
+    except Exception as e:
+        # Unexpected errors
+        logger.error(f"Unexpected error in execute_agent: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "assistant_message": (
+                "I'm sorry, I encountered an error while processing your request. "
+                "Please try again later."
+            ),
+            "tool_calls": [],
+            "raw_response": None,
+            "error": str(e)
+        }
+
+
+# ============================================================================
+# Exports
+# ============================================================================
+
+__all__ = [
+    # Core agent functions
+    "execute_agent",
+    "create_todo_agent",
+    "get_todo_agent",
+    "add_task_tool",
+    "list_tasks_tool",  # T041
+
+    # Task list formatting (T042 & T043)
+    "format_task_list_for_display",
+
+    # Configuration constants
+    "DEFAULT_MODEL",
+    "AGENT_TIMEOUT",
+    "MAX_CONTEXT_TOKENS",
+    "AGENT_TEMPERATURE",
+    "MAX_TOKENS",
+
+    # System instructions (T030)
+    "AGENT_INSTRUCTIONS",
+
+    # MCP to OpenAI adapter (T032 foundation)
+    "MCPToolRegistry",
+    "tool_registry",
+]
