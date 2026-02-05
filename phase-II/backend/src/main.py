@@ -111,32 +111,40 @@ async def startup_event():
     logger.info("Starting Todo API Application")
     logger.info("=" * 60)
 
+    critical_errors = []
+
     # Validate BETTER_AUTH_SECRET
     better_auth_secret = os.getenv("BETTER_AUTH_SECRET")
-    if not better_auth_secret:
-        logger.error("CRITICAL: BETTER_AUTH_SECRET environment variable not set!")
+    if not better_auth_secret or better_auth_secret.strip() == "":
+        error_msg = "CRITICAL: BETTER_AUTH_SECRET environment variable not set or empty!"
+        logger.error(error_msg)
         logger.error("This variable is required for JWT token generation and validation.")
-        raise ValueError("BETTER_AUTH_SECRET environment variable is required")
+        logger.error("Please set it in Render Dashboard with at least 32 random characters.")
+        critical_errors.append("BETTER_AUTH_SECRET is required")
     elif len(better_auth_secret) < 32:
         logger.warning(
             f"WARNING: BETTER_AUTH_SECRET is shorter than 32 characters "
             f"(current length: {len(better_auth_secret)}). "
             "For security, use at least 32 characters."
         )
+        logger.info(f"BETTER_AUTH_SECRET configured (length: {len(better_auth_secret)})")
     else:
         logger.info(f"BETTER_AUTH_SECRET configured (length: {len(better_auth_secret)})")
 
     # Validate DATABASE_URL
     database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        logger.error("CRITICAL: DATABASE_URL environment variable not set!")
+    if not database_url or database_url.strip() == "":
+        error_msg = "CRITICAL: DATABASE_URL environment variable not set or empty!"
+        logger.error(error_msg)
         logger.error("This variable is required for database connectivity.")
-        raise ValueError("DATABASE_URL environment variable is required")
-    elif not database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
-        logger.warning(
-            f"WARNING: DATABASE_URL may not be a valid PostgreSQL URL: {database_url[:20]}..."
-        )
+        logger.error("Please set it in Render Dashboard.")
+        critical_errors.append("DATABASE_URL is required")
     else:
+        # Check if DATABASE_URL starts with correct prefix
+        if not database_url.startswith(("postgresql://", "postgresql+asyncpg://", "postgresql+psycopg2://")):
+            logger.warning(
+                f"WARNING: DATABASE_URL may not be a valid PostgreSQL URL: {database_url[:20]}..."
+            )
         # Extract and log database host (without credentials for security)
         try:
             at_index = database_url.find("@")
@@ -155,6 +163,16 @@ async def startup_event():
         except Exception:
             logger.info("DATABASE_URL configured")
 
+    # Fail startup if critical errors exist
+    if critical_errors:
+        error_summary = ", ".join(critical_errors)
+        logger.error(f"Startup failed: {error_summary}")
+        logger.error("Please set these environment variables in Render Dashboard:")
+        logger.error("1. Go to your Web Service in Render Dashboard")
+        logger.error("2. Click 'Environment' tab")
+        logger.error("3. Add the missing environment variables")
+        raise ValueError(f"Startup failed: {error_summary}")
+
     # Log other configuration
     logger.info(f"Log level: {LOG_LEVEL}")
     logger.info(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
@@ -167,6 +185,8 @@ async def startup_event():
 
     # Log API documentation URL
     logger.info(f"API Documentation: http://localhost:8000/docs")
+    logger.info("=" * 60)
+    logger.info("Application startup completed successfully")
     logger.info("=" * 60)
 
 
@@ -210,10 +230,11 @@ async def readiness_probe():
     """
     try:
         from src.db import engine
+        from sqlalchemy import text
 
-        # Test database connection
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
+        # Test database connection with async
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
 
         logger.debug("Readiness probe: database connection successful")
         return {"status": "ready", "database": "connected"}

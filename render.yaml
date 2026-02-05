@@ -1,14 +1,13 @@
 services:
-  # Web Service for FastAPI Backend
+  # Web Service for Phase-II FastAPI Backend
   - type: web
-    name: fastapi-backend
+    name: q4-hackhthon-phase2-backend
     runtime: python
-    buildCommand: pip install -e .[dev]
-    startCommand: gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --log-level info
+    buildCommand: cd phase-II/backend && pip install -e .[dev]
+    startCommand: cd phase-II/backend && gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --log-level info
 
     # Auto-deploy from main branch
     branch: main
-    rootDir: phase-II/backend
 
     # Health check
     healthCheckPath: /health
@@ -42,7 +41,7 @@ services:
         value: 3.12
 
     # Deploy hooks
-    preDeployCommand: alembic upgrade head
+    preDeployCommand: cd phase-II/backend && alembic upgrade head
 
     # Instance configuration
     plan: starter  # Change to 'standard' or 'pro' for production
@@ -51,5 +50,5 @@ services:
 # - type: cron
 #   name: daily-db-backup
 #   schedule: "0 2 * * *"  # Run at 2 AM daily
-#   command: pg_dump $DATABASE_URL > backup.sql
-#   service: fastapi-backend
+#   command: cd phase-II/backend && pg_dump $DATABASE_URL > backup.sql
+#   service: q4-hackhthon-phase2-backend
