@@ -1,0 +1,40 @@
+services:
+  # Web Service for FastAPI Backend
+  - type: web
+    name: fastapi-backend
+    runtime: python
+    buildCommand: pip install -e .[dev]
+    startCommand: gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --log-level info
+
+    # Auto-deploy from main branch
+    branch: main
+    rootDir: .
+
+    # Health check
+    healthCheckPath: /health
+
+    # Environment variables (set these in Render Dashboard)
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render Dashboard
+      - key: BETTER_AUTH_SECRET
+        sync: false  # Set manually in Render Dashboard
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHON_VERSION
+        value: 3.12
+
+    # Deploy hooks
+    preDeployCommand: alembic upgrade head
+
+    # Instance configuration
+    plan: starter  # Change to 'standard' or 'pro' for production
+
+# Cron jobs for database backups (optional)
+# - type: cron
+#   name: daily-db-backup
+#   schedule: "0 2 * * *"  # Run at 2 AM daily
+#   command: pg_dump $DATABASE_URL > backup.sql
+#   service: fastapi-backend

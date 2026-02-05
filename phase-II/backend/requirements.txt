@@ -1,9 +1,8 @@
 # Production Dependencies for Todo Backend
-# Updated for Vercel serverless deployment
+# Updated for Render deployment
 
 # Core Framework
 fastapi>=0.115.0,<0.116.0
-mangum>=0.17.0,<1.0.0  # ASGI adapter for Vercel/AWS Lambda
 
 # Database
 sqlmodel>=0.0.22,<0.1.0
@@ -24,6 +23,7 @@ slowapi>=0.1.9,<1.0.0
 
 # Server
 uvicorn[standard]>=0.32.0,<1.0.0
+gunicorn>=23.0.0,<24.0.0  # Production WSGI server for Render
 
 # Environment
 python-dotenv>=1.0.0,<2.0.0

@@ -455,81 +455,152 @@ For frequently accessed data, consider adding Redis caching (future enhancement)
 
 ## Deployment
 
-### Using Vercel (Recommended)
+### Deploying to Render (Recommended)
 
-Vercel provides an easy, serverless deployment platform with automatic scaling and zero-configuration deployment.
+Render provides a simple, powerful platform for deploying FastAPI applications with automatic SSL, continuous deployment, and built-in monitoring.
 
 #### Prerequisites
 
-1. **Install Vercel CLI**:
-```bash
-npm install -g vercel
-```
-
-2. **Login to Vercel**:
-```bash
-vercel login
-```
+1. **Render Account**: Sign up at https://render.com
+2. **GitHub Repository**: Your code should be on GitHub
+3. **PostgreSQL Database**: Create a PostgreSQL database on Render
 
 #### Deployment Steps
 
-1. **Set Environment Variables in Vercel Dashboard**:
+1. **Create PostgreSQL Database on Render**:
 
-Before deploying, set these environment variables in your Vercel project settings:
+   - Go to Render Dashboard → New → PostgreSQL
+   - Choose a database name (e.g., `todo_db`)
+   - Select the region closest to your users
+   - Copy the **Internal Database URL** from the dashboard
+
+2. **Prepare Your Repository**:
+
+   Ensure your `render.yaml` file is in the `backend` directory.
+
+3. **Create Web Service on Render**:
+
+   - Go to Render Dashboard → New → Web Service
+   - Connect your GitHub repository
+   - Render will automatically detect the `render.yaml` configuration
+   - Verify the following settings:
+     - **Root Directory**: `backend` (if deploying from monorepo root)
+     - **Runtime**: Python 3.12
+     - **Build Command**: `pip install -e .[dev]`
+     - **Start Command**: `gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000`
+
+4. **Set Environment Variables**:
+
+   In your web service settings, add these environment variables:
+
+   ```bash
+   # Required
+   DATABASE_URL=postgresql://user:password@host/database  # Use your Render PostgreSQL URL
+   BETTER_AUTH_SECRET=your-super-secret-key-at-least-32-chars-long
+
+   # Recommended
+   ENVIRONMENT=production
+   LOG_LEVEL=INFO
+   ```
+
+   **Generate a secure secret**:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+5. **Deploy**:
+
+   - Click "Create Web Service"
+   - Render will automatically deploy your application
+   - The deployment will run migrations automatically via the `preDeployCommand`
+
+6. **Verify Deployment**:
+
+   - Check the deployment logs in Render Dashboard
+   - Visit your API URL: `https://your-service.onrender.com`
+   - Test health check: `https://your-service.onrender.com/health`
+   - Access API docs: `https://your-service.onrender.com/docs`
+
+#### Automatic Deploys
+
+Render automatically deploys when you push to your connected branch (default: `main`):
 
 ```bash
-# Required
-BETTER_AUTH_SECRET=your-super-secret-key-at-least-32-chars-long
-DATABASE_URL=postgresql+asyncpg://user:password@host/database?sslmode=require
-
-# Recommended
-ENVIRONMENT=production
-LOG_LEVEL=INFO
-FRONTEND_URL=https://your-frontend.vercel.app
+git add .
+git commit -m "Your commit message"
+git push origin main
 ```
 
-2. **Deploy**:
+#### Environment Variables in Render
 
-```bash
-# From the backend directory
-cd /path/to/Hackhthon-II/phase-II/backend
+Manage environment variables via:
 
-# Deploy to Vercel
-vercel
+1. **Render Dashboard**: Your Service → Environment
+2. **Render CLI**: `render env add BETTER_AUTH_SECRET`
 
-# For production deployment
-vercel --prod
+#### Database Migrations
+
+The `render.yaml` configuration includes a `preDeployCommand` that automatically runs migrations:
+
+```yaml
+preDeployCommand: alembic upgrade head
 ```
 
-#### How It Works
+This ensures your database schema is always up to date with your code.
 
-- Vercel uses the `vercel.json` configuration file
-- The `api/index.py` file wraps FastAPI with Mangum for AWS Lambda compatibility
-- All routes are automatically handled by the serverless function
-- Vercel handles scaling, HTTPS, and deployment automatically
+#### Monitoring and Logs
 
-#### Environment Variables in Vercel
+- **Live Logs**: View in Render Dashboard → Logs
+- **Metrics**: CPU, memory, and response times in Dashboard
+- **Alerts**: Configure alerting for downtime or errors
+- **Health Checks**: Render monitors the `/health` endpoint
 
-You can set environment variables via:
+#### Scaling
 
-1. **Vercel Dashboard**: Project Settings → Environment Variables
-2. **Vercel CLI**: `vercel env add BETTER_AUTH_SECRET`
-3. **vercel.json**: Add to `env` object (not recommended for secrets)
+Upgrade your plan as needed:
 
-#### Database Setup
+- **Free**: Good for development/testing
+- **Starter ($7/month)**: Basic production usage
+- **Standard ($25/month)**: Higher performance
+- **Pro**: Custom resources and support
 
-For production, use a managed PostgreSQL service:
+#### Advanced Configuration
 
-1. **Neon (Recommended)**: Sign up at https://console.neon.tech
-2. Create a project and copy the connection string
-3. Set `DATABASE_URL` in Vercel environment variables
-4. Run migrations locally: `alembic upgrade head`
+Modify `render.yaml` for custom needs:
 
-#### Monitoring
+```yaml
+services:
+  - type: web
+    name: fastapi-backend
+    runtime: python
+    buildCommand: pip install -e .[dev]
+    startCommand: gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: todo-db  # Reference your Render database
+          property: connectionString
+      - key: BETTER_AUTH_SECRET
+        generateValue: true  # Let Render generate a secure secret
+```
 
-- View logs in Vercel Dashboard
-- Check deployment status with `vercel ls`
-- Access API at: `https://your-project.vercel.app`
+#### Troubleshooting
+
+**Issue**: Deployment fails
+- **Solution**: Check the deployment logs in Render Dashboard
+- Verify `DATABASE_URL` is correctly set
+- Ensure all dependencies are in `requirements.txt`
+
+**Issue**: Health check fails
+- **Solution**: Verify the `/health` endpoint is accessible
+- Check if the port is correct (default: 8000)
+- Ensure the application starts without errors
+
+**Issue**: Database connection errors
+- **Solution**: Verify PostgreSQL is accepting connections
+- Check if the database is in the same region as your web service
+- Ensure SSL is enabled in the DATABASE_URL
 
 ### Using Docker (Alternative)
 
