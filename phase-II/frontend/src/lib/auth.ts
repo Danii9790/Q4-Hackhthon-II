@@ -35,6 +35,8 @@ interface AuthResponse {
  * Authentication error structure.
  */
 interface AuthError {
+  message?: string;
+  code?: string;
   response?: {
     data?: {
       detail?: {
