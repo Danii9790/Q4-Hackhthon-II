@@ -212,8 +212,12 @@ engine = create_engine(
     pool_recycle=3600,  # Recycle connections after 1 hour (prevents stale connections)
 )
 
-# Setup query logging event listeners (T078)
-_setup_query_logging(engine)
+# DISABLE query logging event listeners
+# The event listeners are incompatible with psycopg2's execution context
+# and cause "'PGExecutionContext_psycopg2' object does not support item assignment"
+# This is because psycopg2's execution context doesn't support the context['key'] = value pattern
+# TODO: Implement sync-compatible query logging using SQLAlchemy 2.0 style events
+# _setup_query_logging(engine)
 
 # Create sync session factory
 SessionLocal = sessionmaker(
