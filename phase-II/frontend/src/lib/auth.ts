@@ -140,10 +140,14 @@ export function isAuthenticated(): boolean {
  */
 export async function signIn(email: string, password: string): Promise<AuthResponse['user']> {
   try {
+    console.log('[Auth] Attempting sign in:', { email, endpoint: AUTH_ENDPOINTS.signin });
+
     const response = await axios.post<AuthResponse>(AUTH_ENDPOINTS.signin, {
       email,
       password,
     });
+
+    console.log('[Auth] Sign in successful:', { user: response.data.user.email });
 
     const { token, user } = response.data;
     saveSession(token, user);
@@ -151,6 +155,22 @@ export async function signIn(email: string, password: string): Promise<AuthRespo
     return user;
   } catch (error) {
     const authError = error as AuthError;
+
+    console.error('[Auth] Sign in failed:', {
+      message: authError.message,
+      code: authError.code,
+      hasResponse: !!authError.response,
+      status: authError.response?.status,
+      data: authError.response?.data
+    });
+
+    // Handle network errors (including CORS)
+    if (!authError.response) {
+      if (authError.code === 'ERR_NETWORK') {
+        throw new Error('Unable to connect to the server. Please check your internet connection and ensure CORS is configured properly.');
+      }
+      throw new Error('Network error: Unable to reach the authentication server. Please try again.');
+    }
 
     // Extract error message from backend response
     const message = authError.response?.data?.detail?.message || 'Invalid email or password';
@@ -176,11 +196,15 @@ export async function signUp(
   name?: string
 ): Promise<AuthResponse['user']> {
   try {
+    console.log('[Auth] Attempting sign up:', { email, name, endpoint: AUTH_ENDPOINTS.signup });
+
     const response = await axios.post<AuthResponse>(AUTH_ENDPOINTS.signup, {
       email,
       password,
       name: name || undefined,
     });
+
+    console.log('[Auth] Sign up successful:', { user: response.data.user.email });
 
     const { token, user } = response.data;
     saveSession(token, user);
@@ -188,6 +212,22 @@ export async function signUp(
     return user;
   } catch (error) {
     const authError = error as AuthError;
+
+    console.error('[Auth] Sign up failed:', {
+      message: authError.message,
+      code: authError.code,
+      hasResponse: !!authError.response,
+      status: authError.response?.status,
+      data: authError.response?.data
+    });
+
+    // Handle network errors (including CORS)
+    if (!authError.response) {
+      if (authError.code === 'ERR_NETWORK') {
+        throw new Error('Unable to connect to the server. Please check your internet connection and ensure CORS is configured properly.');
+      }
+      throw new Error('Network error: Unable to reach the authentication server. Please try again.');
+    }
 
     // Extract error message from backend response
     const message = authError.response?.data?.detail?.message || 'Failed to create account';

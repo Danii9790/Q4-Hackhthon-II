@@ -94,6 +94,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://full-stack-application-82mc4iqod.vercel.app",
         "https://q4-hackhthon-ii.vercel.app",
+        "https://todo-application-rho-flax.vercel.app",
     ],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
