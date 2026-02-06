@@ -54,6 +54,41 @@ if _DATABASE_URL.startswith("postgresql://"):
 else:
     DATABASE_URL = _DATABASE_URL
 
+# Remove SSL parameters from DATABASE_URL for asyncpg compatibility
+# Render adds ?sslmode=require which asyncpg doesn't support in URL
+# asyncpg uses SSL by default for secure connections
+import urllib.parse
+parsed = urllib.parse.urlparse(DATABASE_URL)
+# Remove query parameters that asyncpg doesn't support
+if parsed.query:
+    # Keep only ssl parameter if present (asyncpg uses ssl, not sslmode)
+    query_params = urllib.parse.parse_qs(parsed.query)
+    # Filter out unsupported parameters
+    supported_params = {}
+    if 'ssl' in query_params:
+        supported_params['ssl'] = query_params['ssl']
+    # Rebuild URL without unsupported query params
+    if supported_params:
+        new_query = urllib.parse.urlencode(supported_params, doseq=True)
+        DATABASE_URL = urllib.parse.urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+    else:
+        # Remove all query parameters
+        DATABASE_URL = urllib.parse.urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            '',
+            parsed.fragment
+        ))
+
 
 # ============================================================================
 # Query Logging Event Listeners (T078)
@@ -208,12 +243,9 @@ engine = create_async_engine(
     pool_size=10,  # Core connection pool size (10-20 recommended for Neon)
     max_overflow=20,  # Additional connections for peak load (max 30 total)
     pool_recycle=3600,  # Recycle connections after 1 hour (prevents stale connections in serverless)
-    # Serverless PostgreSQL optimizations
-    connect_args={
-        "connect_timeout": 10,  # Connection timeout in seconds
-        "command_timeout": 30,  # Query timeout in seconds
-        "statement_cache_size": 100,  # Cache prepared statements
-    },
+    # Note: connect_args removed for asyncpg compatibility
+    # asyncpg doesn't support these arguments in connect_args
+    # SSL is handled automatically by asyncpg for secure connections
 )
 
 # Setup query logging event listeners (T078)
