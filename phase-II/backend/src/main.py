@@ -232,9 +232,9 @@ async def readiness_probe():
         from src.db import engine
         from sqlalchemy import text
 
-        # Test database connection with async
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
+        # Test database connection
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
 
         logger.debug("Readiness probe: database connection successful")
         return {"status": "ready", "database": "connected"}

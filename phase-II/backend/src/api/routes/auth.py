@@ -5,6 +5,7 @@ This module provides signup and signin endpoints that issue JWT tokens
 compatible with Better Auth on the frontend.
 """
 import os
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -13,10 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Session
 
 from src.db import get_session
 from src.models import User
+
+logger = logging.getLogger(__name__)
 
 # Router configuration
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -216,9 +219,9 @@ def get_password_hash(password: str) -> str:
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def signup(
+def signup(
     request: SignupRequest,
-    session: Annotated[AsyncSession, Depends(get_session)]
+    session: Annotated[Session, Depends(get_session)]
 ) -> AuthResponse:
     """
     Create a new user account and issue a JWT token.
@@ -242,10 +245,8 @@ async def signup(
         HTTPException 500: If server error occurs
     """
     # Check if user already exists
-    result = await session.execute(
-        select(User).where(User.email == request.email)
-    )
-    existing_user = result.scalar_one_or_none()
+    statement = select(User).where(User.email == request.email)
+    existing_user = session.exec(statement).first()
 
     if existing_user:
         raise HTTPException(
@@ -256,34 +257,27 @@ async def signup(
             }
         )
 
-    # Generate UUID for new user
-    import uuid
-    user_id = str(uuid.uuid4())
-
     # Hash password
     hashed_password = get_password_hash(request.password)
 
     # Create user
-    user = User(
-        id=user_id,
-        email=request.email,
-        password_hash=hashed_password,
-        name=request.name,
-        created_at=datetime.now(timezone.utc)
-    )
-
-    session.add(user)
-
     try:
-        await session.commit()
-        await session.refresh(user)
+        user = User(
+            email=request.email,
+            password_hash=hashed_password,
+            name=request.name
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
     except Exception as e:
-        await session.rollback()
+        session.rollback()
+        logger.error(f"Database error during user creation: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "code": "DATABASE_ERROR",
-                "message": "Failed to create user account"
+                "message": f"Failed to create user account: {str(e)}"
             }
         )
 
@@ -314,9 +308,9 @@ async def signup(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def signin(
+def signin(
     request: SigninRequest,
-    session: Annotated[AsyncSession, Depends(get_session)]
+    session: Annotated[Session, Depends(get_session)]
 ) -> AuthResponse:
     """
     Authenticate a user and issue a JWT token.
@@ -338,10 +332,8 @@ async def signin(
         HTTPException 500: If server error occurs
     """
     # Find user by email
-    result = await session.execute(
-        select(User).where(User.email == request.email)
-    )
-    user = result.scalar_one_or_none()
+    statement = select(User).where(User.email == request.email)
+    user = session.exec(statement).first()
 
     # Verify user exists
     if not user:
@@ -426,9 +418,9 @@ class ResetPasswordResponse(BaseModel):
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def forgot_password(
+def forgot_password(
     request: ForgotPasswordRequest,
-    session: Annotated[AsyncSession, Depends(get_session)]
+    session: Annotated[Session, Depends(get_session)]
 ) -> ForgotPasswordResponse:
     """
     Initiate password reset by generating a reset token.
@@ -451,10 +443,8 @@ async def forgot_password(
         HTTPException 500: If server error occurs
     """
     # Find user by email
-    result = await session.execute(
-        select(User).where(User.email == request.email)
-    )
-    user = result.scalar_one_or_none()
+    statement = select(User).where(User.email == request.email)
+    user = session.exec(statement).first()
 
     # For security, always return success even if email doesn't exist
     if not user:
@@ -475,9 +465,10 @@ async def forgot_password(
     user.reset_token_expires = reset_token_expires
 
     try:
-        await session.commit()
+        session.commit()
     except Exception as e:
-        await session.rollback()
+        session.rollback()
+        logger.error(f"Database error during password reset request: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -507,9 +498,9 @@ async def forgot_password(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def reset_password(
+def reset_password(
     request: ResetPasswordRequest,
-    session: Annotated[AsyncSession, Depends(get_session)]
+    session: Annotated[Session, Depends(get_session)]
 ) -> ResetPasswordResponse:
     """
     Reset user password using a valid reset token.
@@ -533,10 +524,8 @@ async def reset_password(
         HTTPException 500: If server error occurs
     """
     # Find user by reset token
-    result = await session.execute(
-        select(User).where(User.reset_token == request.token)
-    )
-    user = result.scalar_one_or_none()
+    statement = select(User).where(User.reset_token == request.token)
+    user = session.exec(statement).first()
 
     if not user:
         raise HTTPException(
@@ -566,9 +555,10 @@ async def reset_password(
     user.reset_token_expires = None
 
     try:
-        await session.commit()
+        session.commit()
     except Exception as e:
-        await session.rollback()
+        session.rollback()
+        logger.error(f"Database error during password reset: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
