@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
-from sqlmodel import Session
+from sqlalchemy.orm import Session
 
 from src.db import get_session
 from src.models import User
@@ -246,7 +246,7 @@ def signup(
     """
     # Check if user already exists
     statement = select(User).where(User.email == request.email)
-    existing_user = session.exec(statement).first()
+    existing_user = session.execute(statement).scalar_one_or_none()
 
     if existing_user:
         raise HTTPException(
@@ -333,7 +333,7 @@ def signin(
     """
     # Find user by email
     statement = select(User).where(User.email == request.email)
-    user = session.exec(statement).first()
+    user = session.execute(statement).scalar_one_or_none()
 
     # Verify user exists
     if not user:
@@ -444,7 +444,7 @@ def forgot_password(
     """
     # Find user by email
     statement = select(User).where(User.email == request.email)
-    user = session.exec(statement).first()
+    user = session.execute(statement).scalar_one_or_none()
 
     # For security, always return success even if email doesn't exist
     if not user:
@@ -525,7 +525,7 @@ def reset_password(
     """
     # Find user by reset token
     statement = select(User).where(User.reset_token == request.token)
-    user = session.exec(statement).first()
+    user = session.execute(statement).scalar_one_or_none()
 
     if not user:
         raise HTTPException(

@@ -160,7 +160,7 @@ def verify_user_access(authenticated_user_id: str, requested_user_id: str) -> No
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def get_user_tasks(
+def get_user_tasks(
     user_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     offset: Annotated[int, Query(ge=0, description="Number of tasks to skip")] = 0,
@@ -235,7 +235,7 @@ async def get_user_tasks(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def create_user_task(
+def create_user_task(
     user_id: str,
     request: TaskCreateRequest,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
@@ -299,7 +299,7 @@ async def create_user_task(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def get_user_task(
+def get_user_task(
     user_id: str,
     task_id: int,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
@@ -362,7 +362,7 @@ async def get_user_task(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def update_user_task(
+def update_user_task(
     user_id: str,
     task_id: int,
     request: TaskUpdateRequest,
@@ -444,7 +444,7 @@ async def update_user_task(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def delete_user_task(
+def delete_user_task(
     task_id: int,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -498,7 +498,7 @@ async def delete_user_task(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def complete_task_endpoint(
+def complete_task_endpoint(
     task_id: int,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -556,7 +556,7 @@ async def complete_task_endpoint(
         500: {"model": ErrorResponse, "description": "Server error"}
     }
 )
-async def uncomplete_task_endpoint(
+def uncomplete_task_endpoint(
     task_id: int,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None

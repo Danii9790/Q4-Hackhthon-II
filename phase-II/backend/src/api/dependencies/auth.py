@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from src.db import get_session
 from src.models import User
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 # Security configuration
 SECRET_KEY = os.getenv("BETTER_AUTH_SECRET")
@@ -66,9 +66,9 @@ class TokenPayload(BaseModel):
 # ============================================================================
 
 
-async def get_current_user(
+def get_current_user(
     authorization: Annotated[str, Header(...)],
-    session: Annotated[AsyncSession, Depends(get_session)]
+    session: Annotated[Session, Depends(get_session)]
 ) -> User:
     """
     Verify JWT token and return the current authenticated user.
@@ -137,7 +137,7 @@ async def get_current_user(
         ) from e
 
     # Get user from database
-    result = await session.execute(
+    result = session.execute(
         select(User).where(User.id == token_data.sub)
     )
     user = result.scalar_one_or_none()
@@ -155,7 +155,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_user_id(
+def get_current_user_id(
     user: Annotated[User, Depends(get_current_user)]
 ) -> str:
     """
@@ -180,7 +180,7 @@ async def get_current_user_id(
     return user.id
 
 
-async def require_auth(
+def require_auth(
     authorization: Annotated[str, Header(...)]
 ) -> TokenPayload:
     """
@@ -245,9 +245,9 @@ async def require_auth(
 # ============================================================================
 
 
-async def get_optional_user(
+def get_optional_user(
     authorization: Annotated[str | None, Header(None)] = None,
-    session: Annotated[AsyncSession, Depends(get_session)] = None
+    session: Annotated[Session, Depends(get_session)] = None
 ) -> User | None:
     """
     Optional authentication - returns user if token provided, None otherwise.
@@ -293,7 +293,7 @@ async def get_optional_user(
         return None
 
     # Get user from database
-    result = await session.execute(
+    result = session.execute(
         select(User).where(User.id == token_data.sub)
     )
     user = result.scalar_one_or_none()
