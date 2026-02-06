@@ -248,8 +248,11 @@ engine = create_async_engine(
     # SSL is handled automatically by asyncpg for secure connections
 )
 
-# Setup query logging event listeners (T078)
-_setup_query_logging(engine)
+# DISABLE query logging event listeners for asyncpg compatibility
+# The event listeners cause "'PGExecutionContext_asyncpg' object does not support item assignment"
+# This is because asyncpg's execution context doesn't support the context['key'] = value pattern
+# TODO: Implement async-compatible query logging using SQLAlchemy 2.0 style events
+# _setup_query_logging(engine)
 
 # Create async session factory
 AsyncSessionLocal = sessionmaker(
