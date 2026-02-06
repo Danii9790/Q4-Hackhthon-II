@@ -47,9 +47,10 @@ interface AuthError {
 }
 
 /**
- * Save session data to localStorage.
+ * Save session data to localStorage and cookie.
  *
  * This stores both the JWT token and user data for use by the API client.
+ * The token is also stored as a cookie for Next.js middleware to access.
  *
  * @param token - JWT bearer token from FastAPI
  * @param user - User object with id, email, name
@@ -62,10 +63,14 @@ function saveSession(token: string, user: AuthResponse['user']): void {
 
   // Store user data for app usage
   localStorage.setItem(SESSION_KEYS.USER, JSON.stringify(user));
+
+  // Also store token as cookie for Next.js middleware access
+  // Set with appropriate security flags
+  document.cookie = `${SESSION_KEYS.TOKEN}=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
 }
 
 /**
- * Clear session data from localStorage.
+ * Clear session data from localStorage and cookies.
  *
  * This is called on sign out or when token expires.
  */
@@ -74,6 +79,9 @@ function clearSession(): void {
 
   localStorage.removeItem(SESSION_KEYS.TOKEN);
   localStorage.removeItem(SESSION_KEYS.USER);
+
+  // Also clear the cookie
+  document.cookie = `${SESSION_KEYS.TOKEN}=; path=/; max-age=0; SameSite=Lax`;
 }
 
 /**

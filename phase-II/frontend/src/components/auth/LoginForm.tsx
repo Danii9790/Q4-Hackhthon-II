@@ -12,7 +12,6 @@
  * - Accessibility features
  */
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { fadeInUp, scaleIn } from '@/lib/animations'
@@ -30,7 +29,6 @@ interface FormErrors {
 }
 
 export default function LoginForm() {
-  const router = useRouter()
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
@@ -74,16 +72,24 @@ export default function LoginForm() {
 
     try {
       // Use auth.signIn which integrates with FastAPI backend
-      await auth.signIn(formData.email, formData.password)
+      const user = await auth.signIn(formData.email, formData.password)
 
-      // Redirect to dashboard on successful login
-      router.push('/dashboard')
+      // Verify the session was stored before redirecting
+      const token = localStorage.getItem('better-auth.session_token')
+
+      if (!token) {
+        throw new Error('Authentication succeeded but session was not stored. Please try again.')
+      }
+
+      console.log('Authentication successful, redirecting to dashboard...', { user: user.email })
+
+      // Use window.location.href for a full page refresh to ensure localStorage is read
+      window.location.href = '/dashboard'
     } catch (error) {
       // Extract error message
       const message = error instanceof Error ? error.message : 'Invalid email or password'
 
       setErrors({ general: message })
-    } finally {
       setIsLoading(false)
     }
   }

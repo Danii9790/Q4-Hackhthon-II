@@ -13,7 +13,6 @@
  * - Accessibility features
  */
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fadeInUp, scaleIn } from '@/lib/animations'
@@ -36,7 +35,6 @@ interface FormErrors {
 }
 
 export default function SignupForm() {
-  const router = useRouter()
   const [formData, setFormData] = useState<SignupFormData>({
     name: '',
     email: '',
@@ -88,14 +86,23 @@ export default function SignupForm() {
 
     try {
       // Use auth.signUp which integrates with FastAPI backend
-      await auth.signUp(
+      const user = await auth.signUp(
         formData.email,
         formData.password,
         formData.name || undefined
       )
 
-      // Redirect to dashboard on successful signup
-      router.push('/dashboard')
+      // Verify the session was stored before redirecting
+      const token = localStorage.getItem('better-auth.session_token')
+
+      if (!token) {
+        throw new Error('Registration succeeded but session was not stored. Please try again.')
+      }
+
+      console.log('Registration successful, redirecting to dashboard...', { user: user.email })
+
+      // Use window.location.href for a full page refresh to ensure localStorage is read
+      window.location.href = '/dashboard'
     } catch (error) {
       // Extract error message
       const message = error instanceof Error ? error.message : 'An unexpected error occurred'
@@ -103,7 +110,6 @@ export default function SignupForm() {
       setErrors({
         general: message,
       })
-    } finally {
       setIsLoading(false)
     }
   }

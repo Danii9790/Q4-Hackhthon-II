@@ -184,7 +184,13 @@ export default function DashboardPage() {
       const token = localStorage.getItem('better-auth.session_token')
       const userDataStr = localStorage.getItem('better-auth.user_data')
 
+      console.log('Dashboard: Checking authentication...', {
+        hasToken: !!token,
+        hasUserData: !!userDataStr
+      })
+
       if (!token) {
+        console.log('Dashboard: No token found, redirecting to login')
         router.push('/login')
         return
       }
@@ -192,12 +198,19 @@ export default function DashboardPage() {
       if (userDataStr) {
         try {
           const userData = JSON.parse(userDataStr)
+          console.log('Dashboard: User data parsed successfully', { email: userData.email })
           setUser(userData)
         } catch (error) {
           console.error('Failed to parse user data:', error)
+          // If user data is corrupted, clear session and redirect
+          localStorage.removeItem('better-auth.session_token')
+          localStorage.removeItem('better-auth.user_data')
+          router.push('/login')
+          return
         }
       }
 
+      console.log('Dashboard: Authentication confirmed')
       setIsAuthenticated(true)
     }
 
