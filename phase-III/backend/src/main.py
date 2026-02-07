@@ -95,6 +95,7 @@ app.add_middleware(
         "https://full-stack-application-82mc4iqod.vercel.app",
         "https://q4-hackhthon-ii.vercel.app",
         "https://todo-application-rho-flax.vercel.app",
+        "https://todo-application-chatbot.vercel.app",
     ],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
@@ -180,7 +181,7 @@ async def startup_event():
     logger.info(f"Debug mode: {os.getenv('DEBUG', 'False')}")
 
     # Log CORS configuration
-    logger.info(f"CORS allowed origins: http://localhost:3000, http://127.0.0.1:3000")
+    logger.info(f"CORS allowed origins: http://localhost:3000, http://127.0.0.1:3000, https://todo-application-chatbot.vercel.app")
     if os.getenv("FRONTEND_URL"):
         logger.info(f"Additional CORS origin: {os.getenv('FRONTEND_URL')}")
 
