@@ -1,70 +1,38 @@
 """
-Conversation model for Todo AI Chatbot.
+Conversation model for Todo Application.
 
-Defines the conversation entity which represents chat sessions.
-A conversation contains multiple messages and belongs to a specific user.
+Stores one ongoing conversation per user for chat interactions.
 """
+from datetime import datetime, timezone
+from sqlmodel import SQLModel, Field, Relationship
+from typing import TYPE_CHECKING, Optional
+import uuid
 
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
-
-from sqlalchemy import text
-from sqlmodel import (
-    Column,
-    DateTime,
-    Field,
-    ForeignKey,
-    Index,
-    SQLModel,
-)
-from sqlmodel import UUID as SQLUUID
+if TYPE_CHECKING:
+    from .user import User
+    from .message import Message
 
 
 class Conversation(SQLModel, table=True):
     """
-    Conversation model representing chat sessions.
+    Represents a chat conversation for a user.
 
-    A conversation contains multiple messages and belongs to a specific user.
-    Multiple conversations per user are supported for independent chat sessions.
+    Each user has one ongoing conversation. All messages in the conversation
+    are stored in the messages table with a foreign key to this model.
 
     Attributes:
-        id: Unique conversation identifier (UUID, generated via gen_random_uuid())
-        user_id: Foreign key reference to user (indexed)
+        id: Unique conversation identifier (UUID)
+        user_id: Foreign key to users table (owner of this conversation)
         created_at: Conversation creation timestamp
-        updated_at: Last update timestamp
+        updated_at: Last activity timestamp (message sent/received)
     """
-
     __tablename__ = "conversations"
 
-    id: UUID = Field(
-        default=None,
-        sa_column=Column(
-            SQLUUID,
-            primary_key=True,
-            server_default=text("gen_random_uuid()"),
-        ),
-        description="Unique conversation identifier (UUID, PostgreSQL-generated)"
-    )
-    user_id: UUID = Field(
-        sa_column=Column(SQLUUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
-        description="Foreign key reference to user"
-    )
-    created_at: datetime = Field(
-        default=None,
-        sa_column=Column(DateTime, nullable=False, server_default=text("now()")),
-        description="Conversation creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default=None,
-        sa_column=Column(DateTime, nullable=False, server_default=text("now()")),
-        description="Last update timestamp"
-    )
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    user_id: str = Field(foreign_key="users.id", unique=True, index=True)  # One conversation per user
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    # Index for efficient user conversation queries
-    __table_args__ = (
-        Index("ix_conversation_user_id", "user_id"),
-    )
-
-    def __repr__(self) -> str:
-        return f"<Conversation(id={self.id}, user_id={self.user_id})>"
+    # Relationships
+    user: "User" = Relationship(back_populates="conversation")
+    messages: list["Message"] = Relationship(back_populates="conversation", cascade_delete=True)

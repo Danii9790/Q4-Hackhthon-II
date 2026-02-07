@@ -1,9 +1,7 @@
 """
-Database session and connection management for Todo AI Chatbot.
+Database session and connection management for Todo Application.
 """
 
-from .session import get_session
-from .session import close_db
-from .init_db import init_db
+from .session import get_session, init_db, close_db, engine
 
-__all__ = ["get_session", "init_db", "close_db"]
+__all__ = ["get_session", "init_db", "close_db", "engine"]

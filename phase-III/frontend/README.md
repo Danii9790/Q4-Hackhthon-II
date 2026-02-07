@@ -1,91 +1,102 @@
-# Todo AI Chatbot Frontend
+# Todo Frontend
 
-React/Next.js frontend for AI-powered task management using natural language.
+A modern, responsive task management application built with Next.js 16, TypeScript, and Tailwind CSS.
 
 ## Features
 
-- 💬 **Natural Language Chat**: Conversational interface for task management
-- 🎨 **Modern UI**: Clean, responsive design with Tailwind CSS
-- 🔐 **Better Auth Integration**: Secure authentication
-- ⚡ **Real-time Updates**: Live typing indicators and message streaming
-- 📱 **Mobile Responsive**: Optimized for all screen sizes
-- 🌙 **Dark Mode**: Automatic theme detection
+- **User Authentication**: Secure sign up and sign in with Better Auth
+- **Task Management**: Create, read, update, and delete tasks
+- **Real-time Updates**: Immediate UI feedback for all actions
+- **Toast Notifications**: Success and error messages for user actions
+- **Responsive Design**: Mobile-first approach that works on all screen sizes (320px+)
+- **Accessibility**: WCAG AA compliant with keyboard navigation and screen reader support
+- **Error Handling**: Global error boundary for graceful error recovery
+- **Loading States**: Visual feedback for all async operations
 
-## Tech Stack
+## Prerequisites
 
-- **React**: 18.3.1
-- **Next.js**: 15.1.3 (App Router)
-- **TypeScript**: Full type safety
-- **Tailwind CSS**: Utility-first styling
-- **Better Auth**: 1.1.9 (authentication)
-- **ChatKit**: @openai/chatkit (AI components)
-- **React Hot Toast**: Notification system
+- **Node.js**: 18.0.0 or higher
+- **npm**: 8.0.0 or higher (comes with Node.js)
 
-## Quick Start
+## Installation
 
-### 1. Prerequisites
+1. **Navigate to the frontend directory**:
+   ```bash
+   cd frontend
+   ```
 
-```bash
-# Install Node.js 18+
-node --version  # Should be v18+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-# Install npm
-npm --version
-```
+3. **Set up environment variables**:
 
-### 2. Environment Setup
+   Create a `.env.local` file in the frontend directory:
 
-```bash
-# Navigate to frontend
-cd /home/xdev/Hackhthon-II/phase-III/frontend
+   ```bash
+   touch .env.local
+   ```
 
-# Install dependencies
-npm install
+   Add the following environment variables:
 
-# Copy environment template
-cp .env.example .env.local
+   ```env
+   # Backend API URL
+   NEXT_PUBLIC_API_URL=http://localhost:8000
 
-# Edit environment variables
-nano .env.local
-```
+   # Better Auth Configuration
+   NEXT_PUBLIC_AUTH_URL=http://localhost:3000
+   NEXT_PUBLIC BETTER_AUTH_URL=http://localhost:8000/auth
+   ```
 
-### 3. Environment Variables
+   Replace the URLs with your actual backend and frontend URLs.
 
-```bash
-# Backend API
-NEXT_PUBLIC_API_URL=http://localhost:8000
+## Running the Application
 
-# Better Auth
-NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
-```
+### Development Mode
 
-### 4. Start Development Server
+Start the development server with hot reload:
 
 ```bash
-# Development mode with hot-reload
 npm run dev
+```
 
-# Build for production
+The application will be available at [http://localhost:3000](http://localhost:3000)
+
+### Production Build
+
+Build the application for production:
+
+```bash
 npm run build
+```
 
-# Start production server
+Start the production server:
+
+```bash
 npm start
+```
 
-# Run type checking
-npm run type-check
+### Linting
 
-# Run linter
+Run the linter to check for code issues:
+
+```bash
 npm run lint
 ```
 
-### 5. Access Application
+### Formatting
+
+Format code with Prettier:
 
 ```bash
-# Open browser
-open http://localhost:3000
+npm run format
+```
 
-# Or use URL
-http://localhost:3000/chat
+Check formatting without making changes:
+
+```bash
+npm run format:check
 ```
 
 ## Project Structure
@@ -93,281 +104,221 @@ http://localhost:3000/chat
 ```
 frontend/
 ├── src/
-│   ├── components/       # React components
-│   │   ├── ChatInterface.tsx    # Main chat container
-│   │   ├── MessageList.tsx      # Message display
-│   │   ├── MessageInput.tsx     # Input form
-│   │   └── TypingIndicator.tsx  # Loading animation
-│   ├── hooks/           # Custom React hooks
-│   │   ├── useAuth.ts            # Authentication state
-│   │   └── useChat.ts            # Chat functionality
-│   ├── lib/             # Libraries and configurations
-│   │   ├── auth.ts              # Better Auth client
-│   │   └── chatkit.ts           # ChatKit configuration
-│   ├── pages/           # Next.js pages
-│   │   ├── _app.tsx             # App wrapper
-│   │   ├── _document.tsx        # HTML structure
-│   │   ├── index.tsx            # Landing page
-│   │   ├── chat.tsx             # Main chat interface
-│   │   ├── signin.tsx           # Sign in/up
-│   │   └── signout.tsx          # Sign out
-│   ├── services/        # API services
-│   │   ├── api.ts               # API client
-│   │   └── chatService.ts       # Chat service
-│   ├── styles/          # Global styles
-│   │   └── globals.css          # Tailwind imports
-│   └── types/           # TypeScript types
-│       └── chat.ts             # Chat-related types
-├── public/              # Static assets
-├── .env.example         # Environment template
-├── next.config.js       # Next.js configuration
-├── tailwind.config.ts   # Tailwind configuration
-└── package.json         # Dependencies
+│   ├── app/                    # Next.js App Router pages
+│   │   ├── (auth)/            # Authentication pages (login, signup)
+│   │   │   ├── login/
+│   │   │   │   └── page.tsx
+│   │   │   └── signup/
+│   │   │       └── page.tsx
+│   │   ├── dashboard/         # Main dashboard page
+│   │   │   └── page.tsx
+│   │   ├── layout.tsx         # Root layout with error boundary
+│   │   ├── page.tsx           # Home/landing page
+│   │   └── globals.css        # Global styles
+│   ├── components/            # React components
+│   │   ├── auth/              # Authentication components
+│   │   │   ├── LoginForm.tsx
+│   │   │   └── SignupForm.tsx
+│   │   ├── task/              # Task-related components
+│   │   │   ├── ConfirmDeleteDialog.tsx
+│   │   │   ├── CreateTaskForm.tsx
+│   │   │   ├── EditTaskModal.tsx
+│   │   │   ├── TaskItem.tsx
+│   │   │   └── TaskList.tsx
+│   │   ├── ui/                # UI components
+│   │   │   ├── Toast.tsx
+│   │   │   └── ToastContainer.tsx
+│   │   └── ErrorBoundary.tsx  # Global error boundary
+│   ├── lib/                   # Utility libraries
+│   │   ├── api.ts             # Central API client
+│   │   └── auth.ts            # Better Auth configuration
+│   └── types/                 # TypeScript type definitions
+│       └── task.ts            # Task-related types
+├── public/                    # Static assets
+├── .env.local                 # Environment variables (create this)
+├── next.config.ts             # Next.js configuration
+├── tailwind.config.ts         # Tailwind CSS configuration
+├── tsconfig.json              # TypeScript configuration
+└── package.json               # Dependencies and scripts
 ```
 
-## Components
+## Component Overview
 
-### ChatInterface
-Main container for chat functionality. Manages chat state and integrates all sub-components.
+### Authentication Components
 
-### MessageList
-Displays chat messages with:
-- User/assistant distinction
-- Timestamps
-- Tool call indicators
-- Auto-scroll to latest message
-- Empty state handling
+#### `LoginForm`
+- User sign-in form with email/password
+- Form validation and error handling
+- Redirects to dashboard on success
+- Located at `/login`
 
-### MessageInput
-Message composition with:
-- Auto-resize textarea
-- Send button with loading state
-- Keyboard shortcuts (Enter to send, Shift+Enter for newline)
-- Character limit enforcement
+#### `SignupForm`
+- User registration form with name/email/password
+- Client-side validation
+- Error display for registration failures
+- Located at `/signup`
 
-### TypingIndicator
-Animated loading indicator during agent processing.
+### Task Components
 
-## Hooks
+#### `CreateTaskForm`
+- Form to create new tasks
+- Title (required) and description (optional) fields
+- Character counters for validation
+- Loading state during submission
+- Success/error toast notifications
 
-### useAuth
-```typescript
-const { user, loading, isAuthenticated } = useAuth();
+#### `TaskList`
+- Displays list of tasks with loading and empty states
+- Shows task count and completion statistics
+- Responsive layout for mobile and desktop
 
-if (!isAuthenticated) {
-  // Redirect to sign in
-}
-```
+#### `TaskItem`
+- Individual task display component
+- Checkbox to toggle completion status
+- Edit and delete action buttons
+- Visual indication of completed tasks
+- Relative date formatting (e.g., "2 hours ago")
 
-### useChat
-```typescript
-const { messages, loading, error, sendMessage } = useChat();
+#### `EditTaskModal`
+- Modal dialog for editing tasks
+- Pre-filled form with existing task data
+- Loading state during save
+- ESC key and backdrop click to close
+- Touch-friendly buttons on mobile
 
-await sendMessage("Add a task to buy groceries");
-```
+#### `ConfirmDeleteDialog`
+- Confirmation dialog before task deletion
+- Warning message with task title
+- Loading state during deletion
+- Keyboard and mouse accessibility
 
-## Authentication
+### UI Components
 
-### Better Auth Setup
+#### `Toast` & `ToastContainer`
+- Toast notification system for success/error messages
+- Auto-dismiss after 3 seconds
+- Manual dismiss capability
+- Smooth animations
+- Context-based API via `useToast()` hook
 
-Authentication is handled by Better Auth. The integration includes:
+#### `ErrorBoundary`
+- Global error boundary for React component errors
+- User-friendly error messages
+- Error details in development mode
+- "Try Again" button to reload
+- Prevents white screen of death
 
-- Sign in/up
-- Sign out
-- Session management
-- JWT token handling
-- Protected routes
+## Development Guidelines
 
-### Protecting Routes
+### Code Style
 
-```typescript
-import { useAuth } from '@/hooks/useAuth';
+- **TypeScript**: All components must use TypeScript with proper type definitions
+- **Client Components**: Use `'use client'` directive for components with interactivity
+- **Server Components**: Default to server components when no client-side features needed
+- **Naming**: Use PascalCase for components, camelCase for functions and variables
 
-export default function ProtectedPage() {
-  const { isAuthenticated } = useAuth();
-  
-  if (!isAuthenticated) {
-    router.push('/signin');
-    return null;
-  }
-  
-  // Render protected content
-}
-```
+### Styling
 
-## ChatKit Configuration
+- **Tailwind CSS**: Use Tailwind utility classes for all styling
+- **Responsive Design**: Mobile-first approach with `sm:`, `md:`, `lg:` breakpoints
+- **Color Palette**: Use semantic color names (blue for primary, red for danger, green for success)
+- **Spacing**: Use Tailwind's spacing scale (2, 4, 8, 12, 16, etc.)
 
-ChatKit is configured in `src/lib/chatkit.ts`:
+### Accessibility
 
-```typescript
-import { chatKit } from '@/lib/chatkit';
+- **Keyboard Navigation**: All interactive elements must be keyboard accessible
+- **ARIA Labels**: Add appropriate `aria-label` attributes to buttons and controls
+- **Focus Indicators**: Ensure visible focus states for all interactive elements
+- **Touch Targets**: Minimum 44x44px for touch-friendly buttons on mobile
+- **Color Contrast**: Meet WCAG AA standards for text and background colors
 
-const response = await chatKit.chat(userId, messages);
-```
+### API Integration
 
-### Features
-- REST adapter for backend API
-- Domain allowlist for security
-- Error handling with retry logic
-- Timeout configuration (30s)
+- **Central API Client**: Always use the `api` client from `@/lib/api`
+- **Error Handling**: Handle API errors with try-catch blocks
+- **Loading States**: Show loading indicators during async operations
+- **Toast Notifications**: Provide feedback for success/error actions
 
-### Allowed Tools
-- `add_task`
-- `list_tasks`
-- `complete_task`
-- `update_task`
-- `delete_task`
+### Best Practices
 
-## Styling
+1. **Component Size**: Keep components focused and under 300 lines
+2. **Props Interface**: Define explicit interfaces for component props
+3. **Callbacks**: Use `useCallback` for event handlers passed to child components
+4. **State Management**: Use local state with `useState` for component-specific data
+5. **Form Validation**: Validate on both client and server side
+6. **Error Messages**: Provide clear, actionable error messages
 
-### Tailwind CSS
+## Environment Variables
 
-The app uses Tailwind CSS for styling with:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXT_PUBLIC_API_URL` | Backend API base URL | `http://localhost:8000` |
+| `NEXT_PUBLIC_AUTH_URL` | Frontend URL for auth callbacks | `http://localhost:3000` |
+| `NEXT_PUBLIC_BETTER_AUTH_URL` | Better Auth backend URL | `http://localhost:8000/auth` |
 
-- Mobile-first responsive design
-- Dark mode support
-- Custom color palette
-- Consistent spacing
+## Browser Support
 
-### Customization
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
 
-Edit `tailwind.config.ts` to customize:
-- Colors
-- Spacing
-- Breakpoints
-- Fonts
+## Responsive Breakpoints
+
+- **Mobile**: < 640px (default)
+- **Tablet**: 640px - 1024px (`sm:`, `md:`)
+- **Desktop**: > 1024px (`lg:`, `xl:`)
+
+Minimum supported screen width: 320px
 
 ## Troubleshooting
 
-### Backend Connection
+### Port Already in Use
+
+If port 3000 is already in use:
 
 ```bash
-# Check API URL
-echo $NEXT_PUBLIC_API_URL
+# Kill process on port 3000
+npx kill-port 3000
 
-# Test connection
-curl $NEXT_PUBLIC_API_URL/health
+# Or use a different port
+npm run dev -- -p 3001
 ```
 
-### Authentication Issues
+### Module Not Found Errors
+
+If you encounter module not found errors:
 
 ```bash
-# Check Better Auth URL
-echo $NEXT_PUBLIC_BETTER_AUTH_URL
-
-# Clear session
-localStorage.clear()
+# Clear node_modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
 ```
 
 ### Build Errors
+
+If the production build fails:
 
 ```bash
 # Clear Next.js cache
 rm -rf .next
 
-# Reinstall dependencies
-rm -rf node_modules package-lock.json
-npm install
-
 # Rebuild
 npm run build
 ```
 
-### TypeScript Errors
-
-```bash
-# Check types
-npm run type-check
-
-# Auto-fix issues
-npm run lint -- --fix
-```
-
-## Development
-
-### Adding New Components
-
-1. Create component in `src/components/`
-2. Use TypeScript with proper types
-3. Add Tailwind classes for styling
-4. Export from `src/components/index.ts`
-
-### Adding New Pages
-
-1. Create page in `src/pages/`
-2. Wrap in Layout component if needed
-3. Add authentication protection
-4. Update navigation
-
-### Testing Locally
-
-```bash
-# Run development server
-npm run dev
-
-# Open browser
-http://localhost:3000
-
-# Test different screen sizes
-# - Desktop: 1920x1080
-# - Tablet: 768x1024
-# - Mobile: 375x667
-```
-
-## Deployment
-
-### Production Build
-
-```bash
-# Build optimized bundle
-npm run build
-
-# Test production build locally
-npm start
-
-# Deploy to Vercel
-vercel --prod
-```
-
-### Environment Variables
-
-Set these in your hosting platform:
-
-```bash
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-NEXT_PUBLIC_BETTER_AUTH_URL=https://yourdomain.com
-```
-
-### Performance Optimization
-
-- Static pages pre-rendered
-- Images optimized
-- CSS minified
-- JavaScript bundled
-- CDN configured
-
-## Browser Support
-
-- Chrome/Edge: Latest 2 versions
-- Firefox: Latest 2 versions
-- Safari: Latest 2 versions
-- Mobile Safari: iOS 14+
-
 ## Contributing
 
-1. Follow React best practices
-2. Use TypeScript for type safety
-3. Write component tests
-4. Follow linting rules
-5. Test on multiple devices
+When contributing to this frontend:
+
+1. Follow the existing code style and structure
+2. Add TypeScript types for all new components and functions
+3. Ensure responsive design for mobile and desktop
+4. Test keyboard navigation and accessibility
+5. Add loading states for async operations
+6. Provide user feedback with toast notifications
+7. Run linting and formatting before committing
 
 ## License
 
-MIT
-
-## Support
-
-For issues and questions:
-- Check component documentation
-- Review examples in code
-- Open an issue on GitHub
+This project is part of the Todo Application Hackathon project.

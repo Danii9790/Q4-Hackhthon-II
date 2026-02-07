@@ -1,84 +1,56 @@
 """
-Message model for Todo AI Chatbot.
+Message model for Todo Application.
 
-Defines the message entity which represents individual conversation messages.
-Messages can be from the user or the AI assistant.
+Stores individual messages within a conversation.
 """
+from datetime import datetime, timezone
+from sqlmodel import SQLModel, Field, Relationship, Column
+from sqlalchemy import String, JSON
+from typing import TYPE_CHECKING, Optional, Dict, Any
+import uuid
+from enum import Enum
 
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
+if TYPE_CHECKING:
+    from .conversation import Conversation
 
-from sqlalchemy import text
-from sqlmodel import (
-    Column,
-    DateTime,
-    Field,
-    ForeignKey,
-    Index,
-    SQLModel,
-    Text,
-)
-from sqlmodel import UUID as SQLUUID
+
+class MessageRole(str, Enum):
+    """Message role enumeration"""
+    USER = "user"
+    ASSISTANT = "assistant"
 
 
 class Message(SQLModel, table=True):
     """
-    Message model representing individual conversation messages.
+    Represents a single message in a conversation.
 
-    Messages can be from the user or the AI assistant.
-    All messages are persisted to maintain conversation context.
+    Messages can be from the user or from the AI assistant. Assistant messages
+    may include tool_calls showing which MCP tools were invoked during processing.
 
     Attributes:
-        id: Unique message identifier (UUID, generated via gen_random_uuid())
-        conversation_id: Foreign key reference to conversation (indexed)
-        user_id: Foreign key reference to user (for data isolation)
-        role: Message role ("user" or "assistant", indexed)
-        content: Message text content (required)
+        id: Unique message identifier (UUID)
+        conversation_id: Foreign key to conversations table
+        role: Message role (user or assistant)
+        content: Message text content
+        tool_calls: JSON data about MCP tools invoked (assistant messages only)
         created_at: Message creation timestamp
     """
-
     __tablename__ = "messages"
 
-    id: UUID = Field(
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    conversation_id: str = Field(foreign_key="conversations.id", index=True)
+    role: MessageRole = Field(default=MessageRole.USER)
+    content: str = Field(default="")
+    tool_calls: Optional[Dict[str, Any]] = Field(
         default=None,
-        sa_column=Column(
-            SQLUUID,
-            primary_key=True,
-            server_default=text("gen_random_uuid()"),
-        ),
-        description="Unique message identifier (UUID, PostgreSQL-generated)"
+        sa_column=Column(JSON),
+        description="Tool invocations by assistant (add_task, list_tasks, etc.)"
     )
-    conversation_id: UUID = Field(
-        sa_column=Column(SQLUUID, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True),
-        description="Foreign key reference to conversation"
-    )
-    user_id: UUID = Field(
-        sa_column=Column(SQLUUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
-        description="Foreign key reference to user (for data isolation)"
-    )
-    role: str = Field(
-        max_length=20,
-        index=True,
-        description="Message role ('user' or 'assistant')"
-    )
-    content: str = Field(
-        sa_column=Column(Text, nullable=False),
-        description="Message text content"
-    )
-    created_at: datetime = Field(
-        default=None,
-        sa_column=Column(DateTime, nullable=False, server_default=text("now()")),
-        description="Message creation timestamp"
-    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
 
-    # Indexes for efficient conversation history queries
-    __table_args__ = (
-        Index("ix_message_conversation_id", "conversation_id"),
-        Index("ix_message_user_id", "user_id"),
-        Index("ix_message_role", "role"),
-    )
+    # Relationships
+    conversation: "Conversation" = Relationship(back_populates="messages")
 
     def __repr__(self) -> str:
-        content_preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
-        return f"<Message(id={self.id}, role={self.role}, content={content_preview})>"
+        """String representation of message"""
+        return f"Message(id={self.id}, role={self.role}, content={self.content[:50]}...)"

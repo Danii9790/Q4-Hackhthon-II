@@ -1,527 +1,293 @@
 """
-FastAPI application main entry point.
-
-Initializes the FastAPI app with error handlers, middleware, and routers.
-Implements T077: Structured logging with request ID tracking.
+FastAPI application for Todo Full-Stack Web Application.
 """
+import os
+import logging
+import sys
+from pathlib import Path
+from typing import Callable
+from uuid import UUID, uuid4
 
-import time
-from contextlib import asynccontextmanager
-from typing import Any
-
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
-from src.db import close_db, init_db
-from src.utils.logging_config import get_logger, generate_request_id, PerformanceTimer, SLOW_REQUEST_THRESHOLD_MS
-from src.api.security import get_frontend_urls, allow_credentials
+from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
+# Load environment variables from .env file
+load_dotenv()
 
-# ============================================================================
-# Logger Setup (T077)
-# ============================================================================
+# Configure logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-logger = get_logger(__name__)
+# Create logs directory if it doesn't exist
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+# Configure root logger
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format=LOG_FORMAT,
+    datefmt=DATE_FORMAT,
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Console handler for development
+        logging.FileHandler(LOG_DIR / "app.log"),  # File handler
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Error Response Models
-# ============================================================================
-
-class ErrorResponse(dict):
+# Request ID Middleware
+class RequestIDMiddleware(BaseHTTPMiddleware):
     """
-    Standardized error response format.
-
-    All API errors follow this structure for consistent client handling.
+    Middleware to add unique request IDs to all incoming requests.
+    Helps with tracing and debugging requests through the system.
     """
 
-    def __init__(
-        self,
-        error: str,
-        message: str,
-        code: str,
-        status_code: int,
-        details: Any = None,
-    ):
-        super().__init__(
-            error=error,
-            message=message,
-            code=code,
-            details=details,
-        )
-        self.status_code = status_code
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Generate or retrieve request ID
+        request_id = request.headers.get("X-Request-ID") or str(uuid4())
+
+        # Add request ID to request state for access in endpoints
+        request.state.request_id = request_id
+
+        # Process request
+        logger.info(f"Request started: {request.method} {request.url.path} [ID: {request_id}]")
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-ID"] = request_id
+            logger.info(
+                f"Request completed: {request.method} {request.url.path} "
+                f"[ID: {request_id}] Status: {response.status_code}"
+            )
+            return response
+        except Exception as e:
+            logger.error(
+                f"Request failed: {request.method} {request.url.path} "
+                f"[ID: {request_id}] Error: {str(e)}"
+            )
+            raise
 
 
-# ============================================================================
-# Exception Handlers
-# ============================================================================
-
-async def http_exception_handler(
-    request: Request,
-    exc: HTTPException,
-) -> JSONResponse:
-    """
-    Handle HTTPException with standardized error response.
-
-    Maps common HTTP status codes to user-friendly error messages.
-    Logs all HTTP errors with context (T077).
-    """
-    # Extract request ID from state if available
-    request_id = getattr(request.state, "request_id", "unknown")
-
-    # Log HTTP exception with context (T077)
-    logger.error(
-        f"HTTP exception: {exc.status_code} - {exc.detail}",
-        extra={
-            "request_id": request_id,
-            "status_code": exc.status_code,
-            "path": str(request.url.path),
-            "method": request.method,
-        }
-    )
-
-    error_mapping = {
-        status.HTTP_400_BAD_REQUEST: (
-            "Bad Request",
-            exc.detail or "The request could not be understood",
-            "BAD_REQUEST"
-        ),
-        status.HTTP_401_UNAUTHORIZED: (
-            "Unauthorized",
-            exc.detail or "Authentication is required to access this resource",
-            "UNAUTHORIZED"
-        ),
-        status.HTTP_403_FORBIDDEN: (
-            "Forbidden",
-            exc.detail or "You don't have permission to access this resource",
-            "FORBIDDEN"
-        ),
-        status.HTTP_404_NOT_FOUND: (
-            "Not Found",
-            exc.detail or "The requested resource was not found",
-            "NOT_FOUND"
-        ),
-        status.HTTP_422_UNPROCESSABLE_ENTITY: (
-            "Validation Error",
-            exc.detail or "Request validation failed",
-            "VALIDATION_ERROR"
-        ),
-        status.HTTP_429_TOO_MANY_REQUESTS: (
-            "Too Many Requests",
-            exc.detail or "Rate limit exceeded. Please try again later",
-            "RATE_LIMIT_EXCEEDED"
-        ),
-    }
-
-    # Get error info or use defaults
-    error, message, code = error_mapping.get(
-        exc.status_code,
-        (
-            "Error",
-            exc.detail or "An unexpected error occurred",
-            "UNKNOWN_ERROR"
-        )
-    )
-
-    error_response = ErrorResponse(
-        error=error,
-        message=message,
-        code=code,
-        status_code=exc.status_code,
-    )
-
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=error_response,
-    )
-
-
-async def generic_exception_handler(
-    request: Request,
-    exc: Exception,
-) -> JSONResponse:
-    """
-    Handle all unhandled exceptions with standardized error response.
-
-    This is a catch-all handler for unexpected errors.
-    Logs all unexpected exceptions with full context (T077).
-    """
-    # Extract request ID from state if available
-    request_id = getattr(request.state, "request_id", "unknown")
-
-    # Log unexpected exception with full context (T077)
-    logger.error(
-        f"Unhandled exception: {exc.__class__.__name__}",
-        exc_info=True,
-        extra={
-            "request_id": request_id,
-            "exception_type": exc.__class__.__name__,
-            "path": str(request.url.path),
-            "method": request.method,
-        }
-    )
-
-    error_response = ErrorResponse(
-        error="Internal Server Error",
-        message="An unexpected error occurred. Please try again later",
-        code="INTERNAL_ERROR",
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        details=str(exc) if os.getenv("DEBUG") else None,
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_response,
-    )
-
-
-async def validation_exception_handler(
-    request: Request,
-    exc: Exception,
-) -> JSONResponse:
-    """
-    Handle Pydantic validation errors with standardized response.
-
-    Provides detailed field-level validation error messages.
-    Logs validation errors with field details (T077).
-    """
-    # Extract request ID from state if available
-    request_id = getattr(request.state, "request_id", "unknown")
-
-    # Pydantic validation errors have a specific structure
-    if hasattr(exc, "errors"):
-        errors = exc.errors()  # type: ignore
-        details = [
-            {
-                "field": ".".join(str(loc) for loc in error["loc"]),
-                "message": error["msg"],
-                "type": error["type"],
-            }
-            for error in errors
-        ]
-
-        # Log validation error with field details (T077)
-        logger.warning(
-            f"Validation error: {len(errors)} field(s)",
-            extra={
-                "request_id": request_id,
-                "validation_errors": details,
-                "path": str(request.url.path),
-                "method": request.method,
-            }
-        )
-    else:
-        details = None
-
-        # Log generic validation error (T077)
-        logger.warning(
-            f"Validation error: {str(exc)}",
-            extra={
-                "request_id": request_id,
-                "path": str(request.url.path),
-                "method": request.method,
-            }
-        )
-
-    error_response = ErrorResponse(
-        error="Validation Error",
-        message="Request validation failed. Please check your input",
-        code="VALIDATION_ERROR",
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        details=details,
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=error_response,
-    )
-
-
-async def rate_limit_exception_handler(
-    request: Request,
-    exc: RateLimitExceeded,
-) -> JSONResponse:
-    """
-    Handle rate limit exceeded errors with standardized response.
-
-    T083: Rate limiting - Returns 429 status with clear error message
-    and retry information. Logs rate limit violations for monitoring.
-    """
-    # Extract request ID from state if available
-    request_id = getattr(request.state, "request_id", "unknown")
-
-    # Log rate limit violation (T077, T083)
-    logger.warning(
-        f"Rate limit exceeded",
-        extra={
-            "request_id": request_id,
-            "path": str(request.url.path),
-            "method": request.method,
-            "client_ip": request.client.host if request.client else "unknown",
-        }
-    )
-
-    # Calculate retry time (1 minute from now)
-    retry_after = 60  # seconds
-
-    error_response = ErrorResponse(
-        error="Too Many Requests",
-        detail=f"Rate limit exceeded. Please try again in {retry_after} seconds.",
-        code="RATE_LIMIT_EXCEEDED",
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        details={"retry_after": retry_after}
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        content=error_response,
-        headers={"Retry-After": str(retry_after)}
-    )
-
-
-# ============================================================================
-# Application Lifecycle
-# ============================================================================
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
-
-    Handles startup and shutdown events for database connections
-    and other resources. Logs lifecycle events (T077).
-    """
-    # Startup: Initialize database
-    logger.info("Starting up Todo AI Chatbot API...")
-
-    # Import engine to pass to init_db
-    from src.db.session import engine
-
-    db_initialized = await init_db(engine)
-    if not db_initialized:
-        logger.warning("Database initialization failed, but application will continue")
-    else:
-        logger.info("Database initialized successfully")
-
-    yield
-
-    # Shutdown: Close database connections
-    logger.info("Shutting down Todo AI Chatbot API...")
-    await close_db()
-    logger.info("Database connections closed")
-
-
-# ============================================================================
-# FastAPI Application
-# ============================================================================
-
-# Create FastAPI app with lifespan
+# Create FastAPI application
 app = FastAPI(
-    title="Todo AI Chatbot API",
-    description="AI-powered task management with natural language interface",
+    title="Todo API",
+    description="RESTful API for multi-user task management with JWT authentication",
     version="1.0.0",
-    lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
+# Add request ID middleware
+app.add_middleware(RequestIDMiddleware)
 
-# ============================================================================
-# Request Logging Middleware (T077)
-# ============================================================================
-
-@app.middleware("http")
-async def request_logging_middleware(request: Request, call_next):
-    """
-    Middleware to log all requests and responses with timing (T077).
-
-    Features:
-    - Generates unique request ID for log correlation
-    - Logs request method, path, and client IP
-    - Measures and logs request duration
-    - Logs slow requests (>3s) at WARNING level
-    - Logs response status code
-    - Adds request ID to request state for access in handlers
-    """
-    # Generate request ID for log correlation
-    request_id = generate_request_id()
-    request.state.request_id = request_id
-
-    # Record start time
-    start_time = time.time()
-
-    # Extract client IP (handle proxy headers)
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    client_ip = forwarded_for.split(",")[0] if forwarded_for else request.client.host if request.client else "unknown"
-
-    # Log incoming request (T077)
-    logger.info(
-        f"Request started: {request.method} {request.url.path}",
-        extra={
-            "request_id": request_id,
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": str(request.query_params) if request.query_params else None,
-            "client_ip": client_ip,
-            "user_agent": request.headers.get("user-agent"),
-        }
-    )
-
-    try:
-        # Process request
-        response = await call_next(request)
-
-        # Calculate duration
-        duration_ms = (time.time() - start_time) * 1000
-
-        # Log response (T077)
-        log_level = logger.warning if duration_ms > SLOW_REQUEST_THRESHOLD_MS else logger.info
-        log_level(
-            f"Request completed: {request.method} {request.url.path} - {response.status_code}",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": duration_ms,
-                "client_ip": client_ip,
-            }
-        )
-
-        # Add request ID to response header for client-side correlation
-        response.headers["X-Request-ID"] = request_id
-
-        return response
-
-    except Exception as e:
-        # Calculate duration for failed requests
-        duration_ms = (time.time() - start_time) * 1000
-
-        # Log failed request (T077)
-        logger.error(
-            f"Request failed: {request.method} {request.url.path}",
-            exc_info=True,
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "duration_ms": duration_ms,
-                "client_ip": client_ip,
-                "exception_type": e.__class__.__name__,
-            }
-        )
-        raise
-
-
-# Register exception handlers
-app.add_exception_handler(HTTPException, http_exception_handler)
-app.add_exception_handler(Exception, generic_exception_handler)
-
-# Register Pydantic validation error handler if available
-try:
-    from fastapi.exceptions import RequestValidationError
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
-except ImportError:
-    pass
-
-# T083: Register rate limit exception handler
-app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
-
-
-# ============================================================================
-# CORS Middleware (T085: Environment-based CORS Configuration)
-# ============================================================================
-
-# T085: Configure CORS from environment variables
-# Supports multiple origins via comma-separated FRONTEND_URL
-# Disables credentials in production for security
-frontend_origins = get_frontend_urls()
-allow_creds = allow_credentials()
-
-logger.info(
-    f"CORS configured: origins={frontend_origins}, allow_credentials={allow_creds}"
-)
-
+# Configure CORS middleware
+# This allows the frontend (running on a different port/domain) to make API requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins,
-    allow_credentials=allow_creds,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],  # Explicit methods for security
-    allow_headers=[
-        "Content-Type",
-        "Authorization",
-        "X-Request-ID",
-        "X-Client-Version",
-    ],  # Explicit headers for security
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://full-stack-application-82mc4iqod.vercel.app",
+        "https://q4-hackhthon-ii.vercel.app",
+        "https://todo-application-rho-flax.vercel.app",
+    ],  # Frontend URLs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-# ============================================================================
-# Health Check Endpoint
-# ============================================================================
+@app.on_event("startup")
+async def startup_event():
+    """
+    Validate environment variables on startup.
+    Ensures critical configuration is present before accepting requests.
+    """
+    logger.info("=" * 60)
+    logger.info("Starting Todo API Application")
+    logger.info("=" * 60)
 
-@app.get("/health", tags=["Health"])
+    critical_errors = []
+
+    # Validate BETTER_AUTH_SECRET
+    better_auth_secret = os.getenv("BETTER_AUTH_SECRET")
+    if not better_auth_secret or better_auth_secret.strip() == "":
+        error_msg = "CRITICAL: BETTER_AUTH_SECRET environment variable not set or empty!"
+        logger.error(error_msg)
+        logger.error("This variable is required for JWT token generation and validation.")
+        logger.error("Please set it in Render Dashboard with at least 32 random characters.")
+        critical_errors.append("BETTER_AUTH_SECRET is required")
+    elif len(better_auth_secret) < 32:
+        logger.warning(
+            f"WARNING: BETTER_AUTH_SECRET is shorter than 32 characters "
+            f"(current length: {len(better_auth_secret)}). "
+            "For security, use at least 32 characters."
+        )
+        logger.info(f"BETTER_AUTH_SECRET configured (length: {len(better_auth_secret)})")
+    else:
+        logger.info(f"BETTER_AUTH_SECRET configured (length: {len(better_auth_secret)})")
+
+    # Validate DATABASE_URL
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url or database_url.strip() == "":
+        error_msg = "CRITICAL: DATABASE_URL environment variable not set or empty!"
+        logger.error(error_msg)
+        logger.error("This variable is required for database connectivity.")
+        logger.error("Please set it in Render Dashboard.")
+        critical_errors.append("DATABASE_URL is required")
+    else:
+        # Check if DATABASE_URL starts with correct prefix
+        if not database_url.startswith(("postgresql://", "postgresql+asyncpg://", "postgresql+psycopg2://")):
+            logger.warning(
+                f"WARNING: DATABASE_URL may not be a valid PostgreSQL URL: {database_url[:20]}..."
+            )
+        # Extract and log database host (without credentials for security)
+        try:
+            at_index = database_url.find("@")
+            if at_index != -1:
+                # Get everything after @ until the next / or ?
+                host_start = at_index + 1
+                separator_pos = database_url.find("/", host_start)
+                query_pos = database_url.find("?", host_start)
+                host_end = min(separator_pos, query_pos) if -1 not in (separator_pos, query_pos) else max(separator_pos, query_pos)
+                if host_end == -1:
+                    host_end = len(database_url)
+                db_host = database_url[host_start:host_end]
+                logger.info(f"DATABASE_URL configured (host: {db_host})")
+            else:
+                logger.info("DATABASE_URL configured")
+        except Exception:
+            logger.info("DATABASE_URL configured")
+
+    # Fail startup if critical errors exist
+    if critical_errors:
+        error_summary = ", ".join(critical_errors)
+        logger.error(f"Startup failed: {error_summary}")
+        logger.error("Please set these environment variables in Render Dashboard:")
+        logger.error("1. Go to your Web Service in Render Dashboard")
+        logger.error("2. Click 'Environment' tab")
+        logger.error("3. Add the missing environment variables")
+        raise ValueError(f"Startup failed: {error_summary}")
+
+    # Log other configuration
+    logger.info(f"Log level: {LOG_LEVEL}")
+    logger.info(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
+    logger.info(f"Debug mode: {os.getenv('DEBUG', 'False')}")
+
+    # Log CORS configuration
+    logger.info(f"CORS allowed origins: http://localhost:3000, http://127.0.0.1:3000")
+    if os.getenv("FRONTEND_URL"):
+        logger.info(f"Additional CORS origin: {os.getenv('FRONTEND_URL')}")
+
+    # Log API documentation URL
+    logger.info(f"API Documentation: http://localhost:8000/docs")
+    logger.info("=" * 60)
+    logger.info("Application startup completed successfully")
+    logger.info("=" * 60)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint - API information."""
+    return {
+        "message": "Todo API",
+        "version": "1.0.0",
+        "status": "healthy",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+@app.get("/health")
 async def health_check():
     """
-    Health check endpoint for monitoring and load balancers.
-
-    Returns service status and basic information.
+    Basic health check endpoint.
+    Returns the overall health status of the API.
     """
-    return {
-        "status": "healthy",
-        "service": "todo-ai-chatbot",
-        "version": "1.0.0",
-    }
+    return {"status": "healthy", "timestamp": "2026-01-22"}
 
 
-# ============================================================================
-# Root Endpoint
-# ============================================================================
-
-@app.get("/", tags=["Root"])
-async def root():
+@app.get("/health/live")
+async def liveness_probe():
     """
-    Root endpoint with API information.
+    Liveness probe - indicates if the server is running.
+    This is a simple check that returns 200 if the server is up.
+    Used by Kubernetes and other orchestrators to check if the container is alive.
     """
-    return {
-        "message": "Todo AI Chatbot API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/health",
-    }
+    return {"status": "alive"}
 
 
-# ============================================================================
-# Router Registration
-# ============================================================================
+@app.get("/health/ready")
+async def readiness_probe():
+    """
+    Readiness probe - indicates if the server is ready to accept requests.
+    Checks database connectivity and other critical dependencies.
+    Used by Kubernetes and other orchestrators to check if the container is ready.
+    """
+    try:
+        from src.db import engine
+        from sqlalchemy import text
 
-# Register chat router with /api prefix
-from src.api.chat import router as chat_router
-from src.api.auth import router as auth_router
+        # Test database connection
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+
+        logger.debug("Readiness probe: database connection successful")
+        return {"status": "ready", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Readiness probe failed: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not_ready",
+                "database": "disconnected",
+                "error": str(e)
+            }
+        )
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler that logs all unhandled exceptions.
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.error(
+        f"Unhandled exception: {exc.__class__.__name__}: {str(exc)} "
+        f"[Request ID: {request_id}] Path: {request.url.path}"
+    )
+    return HTTPException(
+        status_code=500,
+        detail={"error": "Internal server error", "request_id": request_id}
+    )
+
+
+# Rate limit exception handler
+from src.api.security import rate_limit_exceeded_handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
 
 # Include routers
-app.include_router(auth_router)  # Authentication endpoints
-app.include_router(chat_router, prefix="/api")
-
-# Example: Register conversation and task routers
-# from src.api.conversations import router as conversations_router
-# from src.api.tasks import router as tasks_router
-# app.include_router(conversations_router, prefix="/api", tags=["conversations"])
-# app.include_router(tasks_router, prefix="/api", tags=["tasks"])
+from src.api.routes import auth, tasks, chat
+app.include_router(auth.router)
+app.include_router(tasks.router)
+app.include_router(tasks.task_router)
+app.include_router(chat.router)
 
 
-# ============================================================================
-# Imports
-# ============================================================================
+if __name__ == "__main__":
+    import uvicorn
 
-import os
-
-
-# ============================================================================
-# Exports
-# ============================================================================
-
-__all__ = ["app"]
+    # Run the application
+    uvicorn.run(
+        "src.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )

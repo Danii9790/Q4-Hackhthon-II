@@ -1,14 +1,9 @@
 """
-Database models for Todo AI Chatbot.
-
-This module exports all SQLModel models used throughout the application.
-Models are organized into separate files for better maintainability.
+Database models for Todo Application.
 """
-
-# Import individual model modules
-from .conversation import Conversation
-from .message import Message
-from .task import Task
 from .user import User
+from .task import Task
+from .conversation import Conversation
+from .message import Message, MessageRole
 
-__all__ = ["Conversation", "Message", "Task", "User"]
+__all__ = ["User", "Task", "Conversation", "Message", "MessageRole"]

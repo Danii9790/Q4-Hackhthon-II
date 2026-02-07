@@ -1,25 +1,31 @@
 """
-Database session and connection management for Todo AI Chatbot.
+Database session and connection management for Todo Application.
 
 Provides database connection pooling, session creation, and initialization.
-Uses SQLAlchemy async engine with SQLModel ORM.
+Uses SQLAlchemy sync engine with SQLModel ORM.
 
 Implements T078: Database query logging with performance monitoring.
 """
 
 import os
+import sys
 import time
-from typing import Any, AsyncGenerator
+from typing import Generator, Any
 
-from sqlalchemy import event
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import event, create_engine
+from sqlalchemy.orm import sessionmaker, Session
 
 # Import SQLModel metadata for Alembic migrations
 from sqlmodel import SQLModel
 
-from src.models import User, Conversation, Message, Task
-from src.utils.logging_config import get_logger, PerformanceTimer, SLOW_QUERY_THRESHOLD_MS
+# Handle imports for both normal execution and Alembic migrations
+try:
+    from src.models import User, Task
+    from src.utils.logging_config import get_logger, PerformanceTimer, SLOW_QUERY_THRESHOLD_MS
+except ImportError:
+    # When running under Alembic, src is added to sys.path
+    from models import User, Task
+    from utils.logging_config import get_logger, PerformanceTimer, SLOW_QUERY_THRESHOLD_MS
 
 
 # ============================================================================
@@ -34,21 +40,28 @@ logger = get_logger(__name__)
 # ============================================================================
 
 # Database URL from environment variable
-# Format: postgresql+asyncpg://user:password@host/database
-DATABASE_URL = os.getenv(
+# Format: postgresql://user:password@host/database
+_DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://user:password@localhost/todo_ai_chatbot"
+    "postgresql://user:password@localhost/todo_ai_chatbot"
 )
+
+# For sync sessions, we use psycopg2 driver
+# Replace asyncpg with psycopg2 if present
+if _DATABASE_URL.startswith("postgresql+asyncpg://"):
+    DATABASE_URL = _DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+elif _DATABASE_URL.startswith("postgresql://"):
+    # Add psycopg2 driver if not specified
+    DATABASE_URL = _DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://")
+else:
+    DATABASE_URL = _DATABASE_URL
 
 
 # ============================================================================
 # Query Logging Event Listeners (T078)
 # ============================================================================
 
-# Store query start times using context id as key
-_query_start_times = {}
-
-def _setup_query_logging(engine: AsyncSession) -> None:
+def _setup_query_logging(engine) -> None:
     """
     Setup SQLAlchemy event listeners for query logging (T078).
 
@@ -61,17 +74,15 @@ def _setup_query_logging(engine: AsyncSession) -> None:
     Args:
         engine: SQLAlchemy engine instance
     """
-    @event.listens_for(engine.sync_engine, "before_cursor_execute", named=True)
+    @event.listens_for(engine, "before_cursor_execute", named=True)
     def receive_before_cursor_execute(**kw):
         """Record query start time."""
-        context_id = id(kw["context"])
-        _query_start_times[context_id] = time.time()
+        kw["context"]['query_start_time'] = time.time()
 
-    @event.listens_for(engine.sync_engine, "after_cursor_execute", named=True)
+    @event.listens_for(engine, "after_cursor_execute", named=True)
     def receive_after_cursor_execute(**kw):
         """Log query execution with timing (T078)."""
-        context_id = id(kw["context"])
-        query_start_time = _query_start_times.pop(context_id, None)
+        query_start_time = kw["context"].pop('query_start_time', None)
         if query_start_time is None:
             return
 
@@ -103,7 +114,7 @@ def _setup_query_logging(engine: AsyncSession) -> None:
             }
         )
 
-    @event.listens_for(engine.sync_engine, "connect")
+    @event.listens_for(engine, "connect")
     def receive_connect(dbapi_conn, connection_record):
         """Log new database connections (T078)."""
         logger.debug(
@@ -113,7 +124,7 @@ def _setup_query_logging(engine: AsyncSession) -> None:
             }
         )
 
-    @event.listens_for(engine.sync_engine, "close")
+    @event.listens_for(engine, "close")
     def receive_close(dbapi_conn, connection_record):
         """Log database connection closures (T078)."""
         logger.debug(
@@ -164,7 +175,7 @@ def _sanitize_query_params(parameters: Any) -> Any:
         return parameters
 
 
-def _log_pool_metrics(engine: AsyncSession) -> None:
+def _log_pool_metrics(engine) -> None:
     """
     Log connection pool metrics (T078).
 
@@ -189,78 +200,78 @@ def _log_pool_metrics(engine: AsyncSession) -> None:
     )
 
 
-# Create async engine with connection pooling optimized for Neon PostgreSQL
-# Performance: T080 - Connection pooling for serverless PostgreSQL
-engine = create_async_engine(
+# Create sync engine with connection pooling optimized for PostgreSQL
+# Performance: T080 - Connection pooling for PostgreSQL
+engine = create_engine(
     DATABASE_URL,
     echo=False,  # Set to True for SQL query logging during development
-    # Connection pool settings for Neon PostgreSQL (serverless)
+    # Connection pool settings for PostgreSQL
     pool_pre_ping=True,  # Verify connections before using them (detect stale connections)
-    pool_size=10,  # Core connection pool size (10-20 recommended for Neon)
+    pool_size=10,  # Core connection pool size (10-20 recommended)
     max_overflow=20,  # Additional connections for peak load (max 30 total)
-    pool_recycle=3600,  # Recycle connections after 1 hour (prevents stale connections in serverless)
+    pool_recycle=3600,  # Recycle connections after 1 hour (prevents stale connections)
 )
 
-# Setup query logging event listeners (T078)
-_setup_query_logging(engine)
+# DISABLE query logging event listeners
+# The event listeners are incompatible with psycopg2's execution context
+# and cause "'PGExecutionContext_psycopg2' object does not support item assignment"
+# This is because psycopg2's execution context doesn't support the context['key'] = value pattern
+# TODO: Implement sync-compatible query logging using SQLAlchemy 2.0 style events
+# _setup_query_logging(engine)
 
-# Create async session factory
-AsyncSessionLocal = sessionmaker(
+# Create sync session factory
+SessionLocal = sessionmaker(
     engine,
-    class_=AsyncSession,
-    expire_on_commit=False,  # Prevent object expiration after commit
     autocommit=False,
     autoflush=False,
+    expire_on_commit=False,  # Prevent object expiration after commit
 )
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+def get_session() -> Generator[Session, None, None]:
     """
     Dependency that provides a database session with logging (T078).
 
-    Yields an async session and ensures it's closed after use.
+    Yields a sync session and ensures it's closed after use.
     Logs session lifecycle events and pool metrics.
 
     Use with FastAPI Depends():
 
         @app.get("/tasks")
-        async def list_tasks(session: AsyncSession = Depends(get_session)):
+        def list_tasks(session: Session = Depends(get_session)):
             ...
 
     Yields:
-        AsyncSession: SQLAlchemy async session
+        Session: SQLAlchemy sync session
     """
-    async with AsyncSessionLocal() as session:
-        try:
-            logger.debug("Database session acquired")
-            yield session
-        finally:
-            await session.close()
-            logger.debug("Database session released")
+    session = SessionLocal()
+    try:
+        logger.debug("Database session acquired")
+        yield session
+    finally:
+        session.close()
+        logger.debug("Database session released")
 
-            # Log pool metrics periodically (every 10 sessions)
-            # This helps monitor connection pool health (T078)
-            pool = engine.pool
-            if pool.checkedout() == 0:  # Log when pool is idle
-                _log_pool_metrics(engine)
+        # Log pool metrics periodically (every 10 sessions)
+        # This helps monitor connection pool health (T078)
+        pool = engine.pool
+        if pool.checkedout() == 0:  # Log when pool is idle
+            _log_pool_metrics(engine)
 
 
-async def init_db() -> None:
+def init_db() -> None:
     """
     Initialize database by creating all tables.
 
     This function creates all tables defined in SQLModel metadata.
     Use this for development/testing. For production, use Alembic migrations.
 
-    Note: This uses async engine which requires SQLModel 0.0.14+.
-
     Logs initialization progress (T078).
     """
     logger.info("Initializing database schema...")
 
-    async with engine.begin() as conn:
-        # Create all tables (use Alembic for production schema changes)
-        await conn.run_sync(SQLModel.metadata.create_all)
+    # Create all tables (use Alembic for production schema changes)
+    SQLModel.metadata.create_all(engine)
 
     # Log pool metrics after initialization (T078)
     _log_pool_metrics(engine)
@@ -268,7 +279,7 @@ async def init_db() -> None:
     logger.info("Database schema initialized successfully")
 
 
-async def close_db() -> None:
+def close_db() -> None:
     """
     Close all database connections.
 
@@ -281,7 +292,7 @@ async def close_db() -> None:
     # Log final pool metrics before closing (T078)
     _log_pool_metrics(engine)
 
-    await engine.dispose()
+    engine.dispose()
 
     logger.info("Database connections closed")
 
@@ -291,5 +302,5 @@ __all__ = [
     "init_db",
     "close_db",
     "engine",
-    "AsyncSessionLocal",
+    "SessionLocal",
 ]

@@ -1,25 +1,44 @@
 """
-User model for Todo AI Chatbot.
-"""
+User model for Todo Application.
 
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
-from sqlalchemy import Column, String, DateTime
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlmodel import Field, SQLModel
+Note: This model is managed by Better Auth.
+Shown here for reference and relationship definitions.
+"""
+from datetime import datetime, timezone
+from sqlmodel import SQLModel, Field, Relationship
+from typing import TYPE_CHECKING, Optional
+import uuid
+
+if TYPE_CHECKING:
+    from .task import Task
+    from .conversation import Conversation
 
 
 class User(SQLModel, table=True):
     """
-    User model for authentication and task ownership.
+    Represents a person who can log into the system and own tasks.
+
+    This table is managed by Better Auth for authentication purposes.
+
+    Attributes:
+        id: Unique user identifier (UUID)
+        email: User's email address (unique, indexed)
+        password_hash: Bcrypt hash of user's password (never returned in responses)
+        name: User's display name (optional)
+        created_at: Account creation timestamp
+        reset_token: Password reset token (optional)
+        reset_token_expires: When the reset token expires (optional)
     """
     __tablename__ = "users"
 
-    id: str = Field(sa_column=Column(String(255), primary_key=True))
-    email: str = Field(sa_column=Column(String(255), unique=True, nullable=False, index=True))
-    password_hash: str = Field(sa_column=Column(String(255), nullable=False))
-    name: str = Field(default="", sa_column=Column(String(255), nullable=False))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    reset_token: Optional[str] = Field(default=None, sa_column=Column(String(255), nullable=True))
-    reset_token_expires: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    email: str = Field(unique=True, index=True, max_length=255)
+    password_hash: Optional[str] = Field(default=None, exclude=True)  # Never return in API responses
+    name: Optional[str] = Field(default=None, max_length=200)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    reset_token: Optional[str] = Field(default=None, max_length=255)
+    reset_token_expires: Optional[datetime] = None
+
+    # Relationships
+    tasks: list["Task"] = Relationship(back_populates="user")
+    conversation: "Conversation" = Relationship(back_populates="user", cascade_delete=True)
