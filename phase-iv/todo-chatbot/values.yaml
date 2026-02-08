@@ -1,0 +1,192 @@
+# Default values for todo-chatbot application
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  # Environment: development, staging, production
+  environment: local
+
+# Backend configuration
+backend:
+  enabled: true
+  name: backend
+
+  # Container image settings
+  image:
+    repository: todo-backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: NodePort  # Using NodePort for local Minikube deployment
+    port: 8000
+    targetPort: 8000
+    nodePort: 30080  # External port to access backend
+
+  # Replica count for backend
+  replicaCount: 1
+
+  # Environment variables for backend
+  # IMPORTANT: These should be overridden with proper secrets using --set or secret management
+  # For local deployment with Minikube, you can use:
+  # helm install --set backend.env.OPENAI_API_KEY=your_key ...
+  env:
+    DATABASE_URL: "postgresql://user:password@host:5432/dbname?sslmode=require"
+    BETTER_AUTH_SECRET: "change-me-in-production"
+    FRONTEND_URL: "http://localhost:3000"
+    APP_NAME: "Todo API"
+    DEBUG: "False"
+    LOG_LEVEL: "INFO"
+    LOG_FORMAT: "json"
+    JWT_SECRET: "change-me-in-production-use-openssl-rand-hex-32"
+    OPENAI_API_KEY: "your-openai-api-key-here"
+    OPENAI_MODEL: "gpt-4o-mini"
+
+  # Liveness probe configuration
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # Readiness probe configuration
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# Frontend configuration
+frontend:
+  enabled: true
+  name: frontend
+
+  # Container image settings
+  image:
+    repository: todo-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: NodePort  # Using NodePort for local Minikube deployment
+    port: 3000
+    targetPort: 3000
+    nodePort: 30030  # External port to access frontend
+
+  # Replica count for frontend
+  replicaCount: 1
+
+  # Environment variables for frontend
+  env:
+    NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    NEXT_PUBLIC_AUTH_URL: "http://localhost:3000"
+    NEXT_PUBLIC_BETTER_AUTH_URL: "http://localhost:8000/auth"
+    NODE_ENV: "production"
+
+  # Liveness probe configuration
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # Readiness probe configuration
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 300m
+      memory: 256Mi
+    requests:
+      cpu: 150m
+      memory: 128Mi
+
+# Service account configuration
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod labels
+podLabels: {}
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 1001
+
+# Security context - disabled for backend, enabled for frontend
+# Backend needs to run as root to access Python packages
+securityContext: {}
+
+# Ingress configuration (disabled for local Minikube, use NodePort instead)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+# HTTPRoute configuration (disabled for local Minikube)
+httpRoute:
+  enabled: false
+  annotations: {}
+  parentRefs:
+  - name: gateway
+    sectionName: http
+  hostnames:
+  - chart-example.local
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}

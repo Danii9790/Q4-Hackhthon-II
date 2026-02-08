@@ -1,0 +1,55 @@
+services:
+  # Web Service for FastAPI Backend
+  - type: web
+    name: fastapi-backend
+    runtime: python
+    buildCommand: pip install -e .[dev]
+    startCommand: gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --log-level info
+
+    # Auto-deploy from main branch
+    branch: main
+    rootDir: phase-II/backend
+
+    # Health check
+    healthCheckPath: /health
+
+    # Environment variables
+    # IMPORTANT: You must set these in Render Dashboard before deploying!
+    # Go to your service -> Environment -> Add Environment Variable
+    envVars:
+      # REQUIRED: PostgreSQL Database Connection String
+      # Get this from your Render PostgreSQL dashboard
+      # Example: postgresql://user:password@host:5432/database
+      - key: DATABASE_URL
+        sync: false  # MUST BE SET IN RENDER DASHBOARD
+
+      # REQUIRED: Secret key for JWT token generation
+      # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+      # MUST be at least 32 characters long
+      - key: BETTER_AUTH_SECRET
+        sync: false  # MUST BE SET IN RENDER DASHBOARD
+
+      # Optional: Application environment
+      - key: ENVIRONMENT
+        value: production
+
+      # Optional: Logging level
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Optional: Python version
+      - key: PYTHON_VERSION
+        value: 3.12
+
+    # Deploy hooks
+    preDeployCommand: alembic upgrade head
+
+    # Instance configuration
+    plan: starter  # Change to 'standard' or 'pro' for production
+
+# Cron jobs for database backups (optional)
+# - type: cron
+#   name: daily-db-backup
+#   schedule: "0 2 * * *"  # Run at 2 AM daily
+#   command: pg_dump $DATABASE_URL > backup.sql
+#   service: fastapi-backend

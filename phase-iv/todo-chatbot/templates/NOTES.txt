@@ -1,0 +1,46 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+1. Get the application URLs by running these commands:
+
+{{- if .Values.backend.enabled }}
+Backend Service:
+{{- if contains "NodePort" .Values.backend.service.type }}
+  export BACKEND_NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "todo-chatbot.fullname" . }}-backend)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "Backend URL: http://$NODE_IP:$BACKEND_NODE_PORT"
+  echo "Backend API Docs: http://$NODE_IP:$BACKEND_NODE_PORT/docs"
+{{- else if contains "ClusterIP" .Values.backend.service.type }}
+  export BACKEND_POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "todo-chatbot.name" . }}-backend,app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  echo "Backend URL: http://127.0.0.1:8000"
+  echo "Run: kubectl --namespace {{ .Release.Namespace }} port-forward $BACKEND_POD_NAME 8000:8000"
+{{- end }}
+{{- end }}
+
+{{- if .Values.frontend.enabled }}
+Frontend Service:
+{{- if contains "NodePort" .Values.frontend.service.type }}
+  export FRONTEND_NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "todo-chatbot.fullname" . }}-frontend)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "Frontend URL: http://$NODE_IP:$FRONTEND_NODE_PORT"
+{{- else if contains "ClusterIP" .Values.frontend.service.type }}
+  export FRONTEND_POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "todo-chatbot.name" . }}-frontend,app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  echo "Frontend URL: http://127.0.0.1:3000"
+  echo "Run: kubectl --namespace {{ .Release.Namespace }} port-forward $FRONTEND_POD_NAME 3000:3000"
+{{- end }}
+{{- end }}
+
+2. View the pods:
+  $ kubectl get pods --namespace {{ .Release.Namespace }}
+
+3. View the services:
+  $ kubectl get svc --namespace {{ .Release.Namespace }}
+
+4. View the logs:
+  $ kubectl logs --namespace {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
