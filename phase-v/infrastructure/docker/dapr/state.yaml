@@ -1,0 +1,26 @@
+# Dapr State Management Component for PostgreSQL
+# This component provides caching and state management (optional)
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: state-store
+  namespace: default
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+    # PostgreSQL connection string (will be overridden by Kubernetes secret)
+    - name: connectionString
+      value: "host=localhost port=5432 user=postgres password=postgres dbname=todo_db sslmode=disable"
+    # Table name for state storage
+    - name: table
+      value: "dapr_state"
+    # Cleanup interval in seconds
+    - name: cleanupInterval
+      value: "3600"
+    # Maximum state size
+    - name: keyPrefix
+      value: "none"
+scopes:
+  - todo-backend

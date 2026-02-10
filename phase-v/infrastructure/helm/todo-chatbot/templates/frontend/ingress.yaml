@@ -1,0 +1,39 @@
+---
+{{- if and .Values.frontend.enabled .Values.frontend.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "todo-chatbot.fullname" . }}-frontend-ingress
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "todo-chatbot.frontend.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.frontend.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.frontend.ingress.className }}
+  {{- if .Values.frontend.ingress.tls }}
+  tls:
+    {{- range .Values.frontend.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+  {{- range .Values.frontend.ingress.hosts }}
+  - host: {{ .host | quote }}
+    http:
+      paths:
+        {{- range .paths }}
+        - path: {{ .path }}
+          pathType: {{ .pathType }}
+          backend:
+            service:
+              name: {{ include "todo-chatbot.fullname" $ }}-frontend-service
+              port:
+                number: {{ $.Values.frontend.service.port }}
+        {{- end }}
+  {{- end }}
+{{- end }}

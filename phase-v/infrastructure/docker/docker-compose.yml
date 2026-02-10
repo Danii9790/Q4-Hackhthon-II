@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: todo-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: todo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - todo-network
+
+  # Redpanda (Kafka-compatible)
+  redpanda:
+    image: redpandadata/redpanda:v23.2.5
+    container_name: todo-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:9093
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092,OUTSIDE://localhost:9093
+    ports:
+      - "9092:9092"   # Kafka internal
+      - "9093:9093"   # Kafka external
+      - "8081:8081"   # Schema Registry
+      - "9644:9644"   # Redpanda Console
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster ping | grep -q healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - todo-network
+
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: todo-backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/todo_db
+      KAFKA_BROKERS: redpanda:9092
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      FRONTEND_URL: http://localhost:3000
+      DAPR_HTTP_ENDPOINT: http://localhost:3500
+      DAPR_GRPC_ENDPOINT: localhost:50001
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - todo-network
+    volumes:
+      - ../backend:/app
+
+  # Frontend
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: todo-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - todo-network
+    volumes:
+      - ../frontend:/app
+
+volumes:
+  postgres_data:
+  redpanda_data:
+
+networks:
+  todo-network:
+    driver: bridge

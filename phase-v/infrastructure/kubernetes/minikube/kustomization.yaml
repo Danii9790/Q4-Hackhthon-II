@@ -1,0 +1,100 @@
+---
+# Kustomization for Minikube local development
+# This overlays the base manifests with Minikube-specific configurations
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: todo-app
+
+# Base manifests to customize
+resources:
+- ../base/namespace.yaml
+- ../base/configmaps.yaml
+- ../base/secrets.yaml
+- ../base/backend/deployment.yaml
+- ../base/backend/service.yaml
+- ../base/backend/hpa.yaml
+- ../base/frontend/deployment.yaml
+- ../base/frontend/service.yaml
+- ../base/frontend/hpa.yaml
+- ../base/frontend/ingress.yaml
+- ../base/kafka/kafka-cluster.yaml
+- ../base/kafka/kafka-topics.yaml
+- ../base/dapr/pubsub.yaml
+- ../base/dapr/state.yaml
+- ../base/dapr/bindings.yaml
+- ../base/dapr/secrets.yaml
+
+# Minikube-specific patches
+patches:
+# Reduce resource limits for local development
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: backend
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backend
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+  target:
+    kind: Deployment
+    name: backend
+
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: frontend
+    spec:
+      template:
+        spec:
+          containers:
+          - name: frontend
+            resources:
+              requests:
+                cpu: 25m
+                memory: 32Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+  target:
+    kind: Deployment
+    name: frontend
+
+# Minikube-specific image overrides
+images:
+- name: todo-backend
+  newName: todo-backend
+  newTag: dev
+- name: todo-frontend
+  newName: todo-frontend
+  newTag: dev
+
+# ConfigMap overrides for Minikube
+configMapGenerator:
+- name: backend-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=minikube
+  - LOG_LEVEL=DEBUG
+  - KAFKA_BOOTSTRAP_SERVERS=kafka-service.todo-app.svc.cluster.local:9092
+  - DATABASE_HOST=postgresql-service
+  - DATABASE_PORT=5432
+  - DATABASE_NAME=todo_db
+
+- name: frontend-config
+  behavior: merge
+  literals:
+  - NEXT_PUBLIC_ENVIRONMENT=minikube
+  - NEXT_PUBLIC_API_URL=http://backend-service.todo-app.svc.cluster.local:8000
+  - NEXT_PUBLIC_WS_URL=ws://backend-service.todo-app.svc.cluster.local:8000

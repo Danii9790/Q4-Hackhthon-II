@@ -1,0 +1,41 @@
+# Production Dependencies for Todo Backend
+# Updated for Render deployment
+
+# Core Framework
+fastapi>=0.115.0,<0.116.0
+
+# Database
+sqlmodel>=0.0.22,<0.1.0
+psycopg2-binary>=2.9.9,<3.0.0  # Primary database driver for sync operations
+alembic>=1.14.0,<2.0.0
+
+# Data Validation
+pydantic>=2.10.0,<3.0.0
+email-validator>=2.1.0,<3.0.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0,<4.0.0
+passlib[bcrypt]>=1.7.4,<2.0.0
+
+# Rate Limiting
+slowapi>=0.1.9,<1.0.0
+
+# Server
+uvicorn[standard]>=0.32.0,<1.0.0
+gunicorn>=23.0.0,<24.0.0  # Production WSGI server for Render
+
+# Environment
+python-dotenv>=1.0.0,<2.0.0
+
+# AI and Agent Services
+openai>=1.60.0,<2.0.0  # OpenAI API for agent functionality
+mcp>=0.9.0,<1.0.0  # Model Context Protocol SDK
+
+# Phase V: Event-Driven Architecture
+kafka-python>=2.0.2,<3.0.0  # Kafka client for event streaming
+aiokafka>=0.9.0,<1.0.0  # Async Kafka client
+dapr-sdk-python>=0.1.0,<1.0.0  # Dapr distributed runtime SDK
+httpx>=0.27.0,<1.0.0  # Async HTTP client (already required by openai)
+
+# Phase V: Monitoring and Observability
+prometheus-client>=0.20.0,<1.0.0  # Prometheus metrics client

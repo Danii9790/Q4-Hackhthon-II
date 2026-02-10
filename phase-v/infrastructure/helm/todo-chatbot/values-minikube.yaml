@@ -1,0 +1,123 @@
+---
+# Values for Minikube local development
+# Override default values with Minikube-specific settings
+
+# Global configuration
+global:
+  environment: "minikube"
+  namespace: "todo-app"
+  imagePullPolicy: IfNotPresent
+
+# Backend configuration for Minikube
+backend:
+  replicaCount: 1
+
+  image:
+    repository: todo-backend
+    tag: "dev"
+    pullPolicy: Never  # Use local Minikube images
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  autoscaling:
+    enabled: false  # Disable autoscaling on Minikube
+
+  env:
+    LOG_LEVEL: "DEBUG"
+    ENVIRONMENT: "minikube"
+
+  database:
+    external: false
+    host: "postgresql-service"
+    port: 5432
+    name: "todo_db"
+
+  kafka:
+    bootstrapServers: "kafka-service.todo-app.svc.cluster.local:9092"
+    external: false
+    saslEnabled: false
+
+# Frontend configuration for Minikube
+frontend:
+  replicaCount: 1
+
+  image:
+    repository: todo-frontend
+    tag: "dev"
+    pullPolicy: Never  # Use local Minikube images
+
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+  autoscaling:
+    enabled: false  # Disable autoscaling on Minikube
+
+  ingress:
+    enabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      - host: todo.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []  # No TLS on Minikube
+
+  env:
+    NEXT_PUBLIC_APP_NAME: "Todo Chatbot"
+    NEXT_PUBLIC_ENVIRONMENT: "minikube"
+    NEXT_PUBLIC_API_URL: "http://backend-service.todo-app.svc.cluster.local:8000"
+    NEXT_PUBLIC_WS_URL: "ws://backend-service.todo-app.svc.cluster.local:8000"
+
+# Kafka configuration for Minikube
+kafka:
+  enabled: true
+  external: false
+  name: "redpanda"
+  replicaCount: 1  # Single replica for local development
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+  persistence:
+    enabled: true
+    size: 1Gi
+
+# PostgreSQL configuration for Minikube
+postgresql:
+  enabled: true  # Use local PostgreSQL on Minikube
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Monitoring disabled for Minikube
+monitoring:
+  enabled: false
+
+# Pod Monitor disabled for Minikube
+backend:
+  podMonitor:
+    enabled: false

@@ -1,0 +1,28 @@
+# Dapr Pub/Sub Component for Kafka
+# This component enables event-driven architecture by abstracting Kafka
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Kafka broker addresses
+    - name: brokers
+      value: "localhost:9092"
+    # Consumer group for this application
+    - name: consumerGroup
+      value: "todo-chatbot-group"
+    # Enable automatic topic creation
+    - name: autoEnableSsl
+      value: "false"
+    # Initial offset for new consumer groups
+    - name: initialOffset
+      value: "earliest"
+scopes:
+  - todo-backend
+  - notification-service
+  - recurring-task-service

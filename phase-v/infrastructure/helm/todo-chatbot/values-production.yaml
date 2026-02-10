@@ -1,0 +1,200 @@
+---
+# Values for production deployment on DigitalOcean Kubernetes
+# Override default values with production-specific settings
+
+# Global configuration
+global:
+  environment: "production"
+  namespace: "todo-app"
+  imagePullPolicy: Always
+
+# Backend configuration for production
+backend:
+  replicaCount: 3  # Start with 3 replicas for HA
+
+  image:
+    repository: your-registry/todo-backend
+    tag: "1.0.0"  # Use semantic versioning in production
+    pullPolicy: Always
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  env:
+    LOG_LEVEL: "INFO"
+    ENVIRONMENT: "production"
+
+  # Use external Neon database
+  database:
+    external: true
+    url: ""  # Set via Secret: DATABASE_URL
+    host: ""  # e.g., "ep-cool-neon.us-east-2.aws.neon.tech"
+    port: 5432
+    name: "todo_db"
+    user: ""  # Set via Secret
+    password: ""  # Set via Secret
+
+  # Use external Redpanda Cloud Kafka
+  kafka:
+    bootstrapServers: "kafka-service.todo-app.svc.cluster.local:9092"
+    external: true  # Use external Kafka
+    bootstrapServersExternal: ""  # Set via Secret (e.g., "your-cluster.redpanda.cloud:9092")
+    saslEnabled: true
+    saslMechanism: "SCRAM-SHA-256"
+    saslUsername: ""  # Set via Secret
+    saslPassword: ""  # Set via Secret
+
+  # Pod Disruption Budget for high availability
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  # Pod monitoring
+  podMonitor:
+    enabled: true
+
+# Frontend configuration for production
+frontend:
+  replicaCount: 3  # Start with 3 replicas for HA
+
+  image:
+    repository: your-registry/todo-frontend
+    tag: "1.0.0"
+    pullPolicy: Always
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  ingress:
+    enabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/security-headers: "true"
+      nginx.ingress.kubernetes.io/cors-allow-origin: "https://todo.example.com"
+      nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+      nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+      # Rate limiting
+      nginx.ingress.kubernetes.io/limit-rps: "100"
+      # cert-manager
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: todo.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: frontend-tls-secret
+        hosts:
+          - todo.example.com
+
+  env:
+    NEXT_PUBLIC_APP_NAME: "Todo Chatbot"
+    NEXT_PUBLIC_ENVIRONMENT: "production"
+    NEXT_PUBLIC_API_URL: "https://api.todo.example.com"
+    NEXT_PUBLIC_WS_URL: "wss://api.todo.example.com"
+
+  # Pod Disruption Budget for high availability
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+# Kafka configuration for production
+kafka:
+  enabled: false  # Use external Redpanda Cloud
+  external: true
+  bootstrapServers: ""  # Set via Secret (e.g., "your-cluster.redpanda.cloud:9092")
+  saslEnabled: true
+  saslMechanism: "SCRAM-SHA-256"
+  saslUsername: ""  # Set via Secret
+  saslPassword: ""  # Set via Secret
+
+# PostgreSQL configuration for production
+postgresql:
+  enabled: false  # Use external Neon database
+
+# Dapr configuration
+dapr:
+  enabled: true
+
+# Monitoring configuration for production
+monitoring:
+  enabled: true
+  namespace: "monitoring"
+  # Install Prometheus and Grafana
+  installPrometheus: true
+  installGrafana: true
+
+# Service Account configuration
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: ""  # For AWS EKS (if using AWS)
+  # For DigitalOcean, no additional annotations needed
+
+# Node selector for production
+# Use dedicated nodes for production workloads
+nodeSelector:
+  workload: "production"
+
+# Tolerations for production nodes
+tolerations:
+  - key: "workload"
+    operator: "Equal"
+    value: "production"
+    effect: "NoSchedule"
+
+# Affinity rules for production
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - todo-chatbot
+          topologyKey: kubernetes.io/hostname
+
+# Pod security context for production
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Security context for production
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true

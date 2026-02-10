@@ -1,0 +1,99 @@
+---
+# Kafka cluster using Redpanda operator (lightweight Kafka-compatible implementation)
+# Alternative: Use Strimzi for Apache Kafka
+
+apiVersion: cluster.redpanda.com/v1alpha1
+kind: Redpanda
+metadata:
+  name: redpanda
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: kafka
+spec:
+  # Cluster configuration
+  replicas: 1  # For production: use 3+ replicas for high availability
+
+  # Resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Storage configuration
+  storage:
+    - className: standard
+      storageClass:
+        name: standard
+      size: 1Gi  # For production: use 100Gi+
+
+  # Configuration
+  config:
+    developer_mode: true  # Enable for local development
+
+---
+# Alternative: Strimzi Kafka cluster (if using Apache Kafka instead of Redpanda)
+# Uncomment this section and remove the Redpanda manifest above if using Strimzi
+
+# apiVersion: kafka.strimzi.io/v1beta2
+# kind: Kafka
+# metadata:
+#   name: kafka-cluster
+#   namespace: todo-app
+#   labels:
+#     app: todo-chatbot
+#     component: kafka
+# spec:
+#   kafka:
+#     replicas: 1  # For production: use 3+ replicas
+#     listeners:
+#       - name: plain
+#         port: 9092
+#         type: internal
+#         tls: false
+#       - name: external
+#         port: 9094
+#         type: nodeport
+#         tls: false
+#     config:
+#       offsets.topic.replication.factor: 1
+#       transaction.state.log.replication.factor: 1
+#       transaction.state.log.min.isr: 1
+#       default.replication.factor: 1
+#       min.insync.replicas: 1
+#       inter.broker.protocol.version: "3.5"
+#     storage:
+#       type: jbod
+#       volumes:
+#       - id: 0
+#         type: persistent-claim
+#         size: 1Gi  # For production: use 100Gi+
+#         class: standard
+#     resources:
+#       requests:
+#         cpu: 100m
+#         memory: 256Mi
+#       limits:
+#         cpu: 500m
+#         memory: 512Mi
+#
+#   zookeeper:
+#     replicas: 1  # For production: use 3+ replicas
+#     storage:
+#       type: persistent-claim
+#       size: 1Gi
+#       class: standard
+#     resources:
+#       requests:
+#         cpu: 50m
+#         memory: 128Mi
+#       limits:
+#         cpu: 200m
+#         memory: 256Mi
+#
+#   entityOperator:
+#     topicOperator: {}
+#     userOperator: {}

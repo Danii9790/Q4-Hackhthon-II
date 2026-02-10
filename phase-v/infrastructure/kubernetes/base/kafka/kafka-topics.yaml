@@ -1,0 +1,76 @@
+---
+# Kafka topics for the Todo Chatbot application
+# Note: These topics will be automatically created by the Kafka Topic Operator (if using Strimzi)
+# or manually created using Kafka CLI/API
+
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: task-events
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: kafka
+spec:
+  partitions: 3
+  replicas: 1  # For production: use 3 for high availability
+  config:
+    retention.ms: "604800000"  # 7 days
+    segment.ms: "86400000"  # 1 day
+    cleanup.policy: "delete"
+
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: task-updates
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: "86400000"  # 1 day
+    segment.ms: "3600000"  # 1 hour
+    cleanup.policy: "delete"
+
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: reminders
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: "86400000"  # 1 day
+    segment.ms: "3600000"  # 1 hour
+    cleanup.policy: "delete"
+
+---
+# Service for Kafka access (if using NodePort or LoadBalancer)
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: kafka
+spec:
+  type: ClusterIP
+  selector:
+    app: redpanda  # Change to kafka-cluster if using Strimzi
+    component: kafka
+  ports:
+  - name: kafka
+    port: 9092
+    targetPort: 9092
+    protocol: TCP
+  sessionAffinity: None

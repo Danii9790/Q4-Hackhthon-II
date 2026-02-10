@@ -1,6 +1,6 @@
 # Q4 Hackhthon II - Project Phases
 
-This repository contains the Q4 Hackhthon II project organized into three distinct phases, representing progressive development milestones. Each phase is a self-contained project with its own backend and frontend components.
+This repository contains the Q4 Hackhthon II project organized into five distinct phases, representing progressive development milestones. Each phase is a self-contained project with its own backend and frontend components.
 
 ## Repository Structure
 
@@ -9,6 +9,8 @@ Q4-Hackhthon-II/
 ├── phase-I/      # Initial project implementation - Todo CLI Application
 ├── phase-II/     # Enhanced Todo Application with FastAPI + Next.js + Better Auth
 ├── phase-III/    # Advanced AI-powered Todo Application
+├── phase-IV/     # AI Task Management System with ChatGPT Integration
+├── phase-v/      # Advanced Cloud Deployment with Event-Driven Architecture
 └── README.md     # This file
 ```
 
@@ -39,7 +41,35 @@ Q4-Hackhthon-II/
 - **Type**: Advanced web application with AI features
 - **Tech Stack**: TBD
 - **Features**: AI-powered task management, smart suggestions
-- **Status**: In development
+- **Status**: Completed
+
+### Phase-IV: AI Task Management with ChatGPT
+- **Type**: AI-integrated task management
+- **Tech Stack**: FastAPI, Next.js, OpenAI API, PostgreSQL
+- **Features**: ChatGPT-powered task assistant, intelligent recommendations
+- **Status**: Completed
+
+### Phase-V: Advanced Cloud Deployment ⭐ NEW
+- **Type**: Production-ready cloud-native application
+- **Tech Stack**:
+  - Backend: FastAPI, SQLModel, PostgreSQL, Kafka, Dapr
+  - Frontend: Next.js, TypeScript, Tailwind CSS
+  - Infrastructure: Kubernetes, Minikube, Helm, Prometheus, Grafana
+  - CI/CD: GitHub Actions
+- **Features**:
+  - **Advanced Task Management**: Due dates, priorities, tags, search
+  - **Recurring Tasks**: Automated task generation with flexible schedules
+  - **Intelligent Reminders**: Context-aware notification system
+  - **Real-Time Sync**: WebSocket-based multi-device synchronization
+  - **Event-Driven Audit Trail**: Complete immutable audit log
+  - **Cloud Deployment**:
+    - Local: Minikube with Dapr and Kafka
+    - Production: DigitalOcean Kubernetes with SSL
+  - **Monitoring**: Prometheus metrics, Grafana dashboards, Loki logs
+  - **CI/CD**: Automated testing, building, and deployment
+- **Status**: Production Ready 🚀
+- **Documentation**: See [phase-v/specs/006-advanced-cloud-deployment/quickstart.md](phase-v/specs/006-advanced-cloud-deployment/quickstart.md)
+- **API Docs**: See [phase-v/backend/docs/api.md](phase-v/backend/docs/api.md)
 
 ## Quick Start
 

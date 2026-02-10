@@ -1,0 +1,33 @@
+---
+# Dapr Pub/Sub component for Kafka
+# This enables Dapr to publish/subscribe to Kafka topics
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: dapr
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  - name: brokers
+    value: "kafka-service.todo-app.svc.cluster.local:9092"
+  - name: consumerGroup
+    value: "todo-consumer-group"
+  - name: clientID
+    value: "todo-backend"
+  - name: authRequired
+    value: "false"
+  - name: startOffset
+    value: "newest"
+  - name: maxMessageBytes
+    value: "1024"
+  # Scopes configuration (which services can publish/subscribe)
+  # - name: scope
+  #   value: "todo-backend"
+  # - name: scope
+  #   value: "todo-gateway"

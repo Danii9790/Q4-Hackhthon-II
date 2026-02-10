@@ -1,0 +1,44 @@
+---
+# ConfigMap for backend environment variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: backend
+data:
+  # Database configuration
+  DATABASE_HOST: "postgresql-service"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "todo_db"
+
+  # Kafka configuration
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-service.todo-app.svc.cluster.local:9092"
+
+  # Application configuration
+  LOG_LEVEL: "INFO"
+  ENVIRONMENT: "production"
+
+  # CORS configuration
+  FRONTEND_URL: "https://todo.example.com"
+
+---
+# ConfigMap for frontend environment variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: frontend
+data:
+  # API configuration
+  NEXT_PUBLIC_API_URL: "https://api.todo.example.com"
+  NEXT_PUBLIC_WS_URL: "wss://api.todo.example.com"
+
+  # Application configuration
+  NEXT_PUBLIC_APP_NAME: "Todo Chatbot"
+  NEXT_PUBLIC_ENVIRONMENT: "production"

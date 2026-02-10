@@ -1,0 +1,27 @@
+# Dapr Cron Binding for Reminder Scheduler
+# This component triggers periodic checks for due reminders
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: reminder-cron
+  namespace: default
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+    # Cron schedule: every 5 minutes
+    - name: schedule
+      value: "*/5 * * * *"
+    # HTTP endpoint to call
+    - name: endpoint
+      value: "api/reminders/check"
+    # HTTP method
+    - name: method
+      value: "POST"
+    # Authentication (if needed)
+    - name: authorization
+      value: "Bearer <API_TOKEN>"
+scopes:
+  - todo-backend
+  - notification-service

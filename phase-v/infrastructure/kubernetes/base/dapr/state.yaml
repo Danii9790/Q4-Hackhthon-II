@@ -1,0 +1,35 @@
+---
+# Dapr State component for PostgreSQL
+# This enables Dapr to use PostgreSQL as a state store
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: postgres-state
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: dapr
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+  - name: connectionString
+    secretKeyRef:
+      name: dapr-postgres-secret
+      key: connection-string
+  - name: tableName
+    value: "dapr_state"
+  - name: keyPrefix
+    value: "none"
+  - name: cleanupIntervalInSeconds
+    value: "3600"  # 1 hour
+  - name: maxConns
+    value: "10"  # Maximum number of connections
+  - name: queryExecTimeout
+    value: "10s"
+  # Scopes configuration (which services can use this state store)
+  # - name: scope
+  #   value: "todo-backend"
+  # - name: scope
+  #   value: "todo-gateway"

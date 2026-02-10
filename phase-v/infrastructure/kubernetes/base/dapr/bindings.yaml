@@ -1,0 +1,26 @@
+---
+# Dapr Cron Binding component for reminder scheduler
+# This enables Dapr to trigger reminder events based on cron schedules
+
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: reminder-cron
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: dapr
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+  - name: schedule
+    value: "@every 5m"  # Check for reminders every 5 minutes
+  # Alternative schedule formats:
+  # - "0 */5 * * * *" (every 5 minutes)
+  # - "0 0 * * * *" (every hour)
+  # - "0 0 9 * * *" (every day at 9 AM)
+  - name: timeZone
+    value: "UTC"
+  scopes:
+  - todo-backend

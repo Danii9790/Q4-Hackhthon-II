@@ -1,0 +1,92 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: todo-app
+  labels:
+    app: todo-chatbot
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: todo-chatbot
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: todo-chatbot
+        component: frontend
+      annotations:
+        # Dapr sidecar configuration (disabled for frontend, not needed)
+        dapr.io/enabled: "false"
+        # Prometheus metrics annotations
+        prometheus.io/scrape: "false"
+    spec:
+      containers:
+      - name: frontend
+        image: todo-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        # API configuration
+        - name: NEXT_PUBLIC_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: frontend-config
+              key: NEXT_PUBLIC_API_URL
+        - name: NEXT_PUBLIC_WS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: frontend-config
+              key: NEXT_PUBLIC_WS_URL
+
+        # Application configuration
+        - name: NEXT_PUBLIC_APP_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: frontend-config
+              key: NEXT_PUBLIC_APP_NAME
+        - name: NEXT_PUBLIC_ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: frontend-config
+              key: NEXT_PUBLIC_ENVIRONMENT
+
+        # Resource limits
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # Graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 5"]
+      terminationGracePeriodSeconds: 30

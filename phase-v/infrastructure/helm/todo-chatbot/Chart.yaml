@@ -1,0 +1,28 @@
+---
+apiVersion: v2
+name: todo-chatbot
+description: A Helm chart for Todo Chatbot application with backend, frontend, Kafka, and Dapr integration
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - todo
+  - chatbot
+  - fastapi
+  - nextjs
+  - kafka
+  - dapr
+maintainers:
+  - name: Todo Chatbot Team
+    email: dev@example.com
+home: https://github.com/your-org/hackathon-ii
+sources:
+  - https://github.com/your-org/hackathon-ii
+icon: https://raw.githubusercontent.com/your-org/hackathon-ii/main/docs/icon.png
+annotations:
+  artifacthub.io/category: networking
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/your-org/hackathon-ii/blob/main/docs/README.md
+    - name: Support
+      url: https://github.com/your-org/hackathon-ii/issues

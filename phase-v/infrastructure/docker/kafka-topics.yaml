@@ -1,0 +1,30 @@
+# Kafka Topics Configuration for Phase V
+# These topics will be created automatically when the application starts
+
+Topics:
+  # Topic for all task CRUD operations (created, updated, completed, deleted)
+  # Consumed by: Audit Service, Recurring Task Service
+  - name: task-events
+    partitions: 3
+    replication-factor: 1
+    config:
+      retention.ms: "604800000"  # 7 days
+      cleanup.policy: "delete"
+
+  # Topic for reminder notifications
+  # Consumed by: Notification Service
+  - name: reminders
+    partitions: 3
+    replication-factor: 1
+    config:
+      retention.ms: "86400000"  # 1 day
+      cleanup.policy: "delete"
+
+  # Topic for real-time task synchronization across clients
+  # Consumed by: WebSocket Gateway
+  - name: task-updates
+    partitions: 3
+    replication-factor: 1
+    config:
+      retention.ms: "3600000"  # 1 hour
+      cleanup.policy: "delete"

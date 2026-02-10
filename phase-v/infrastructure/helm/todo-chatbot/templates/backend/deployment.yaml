@@ -1,0 +1,149 @@
+---
+{{- if .Values.backend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "todo-chatbot.fullname" . }}-backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "todo-chatbot.backend.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.backend.autoscaling.enabled }}
+  replicas: {{ .Values.backend.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "todo-chatbot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "todo-chatbot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+      annotations:
+        {{- if .Values.backend.dapr.enabled }}
+        # Dapr sidecar configuration
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "{{ .Values.backend.dapr.appId }}"
+        dapr.io/app-port: "{{ .Values.backend.dapr.appPort }}"
+        dapr.io/log-level: "{{ .Values.backend.dapr.logLevel }}"
+        {{- end }}
+        # Prometheus metrics
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.backend.service.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "todo-chatbot.serviceAccountName" . }}
+      containers:
+      - name: backend
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        image: "{{ .Values.global.imageRegistry }}/{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.backend.service.port }}
+          protocol: TCP
+        env:
+        # Database configuration
+        {{- if .Values.backend.database.external }}
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-backend-secrets
+              key: database-url
+        {{- else }}
+        - name: DATABASE_HOST
+          value: {{ .Values.backend.database.host | quote }}
+        - name: DATABASE_PORT
+          value: {{ .Values.backend.database.port | quote }}
+        - name: DATABASE_NAME
+          value: {{ .Values.backend.database.name | quote }}
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-backend-secrets
+              key: database-user
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-backend-secrets
+              key: database-password
+        {{- end }}
+
+        # Kafka configuration
+        {{- if .Values.backend.kafka.external }}
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-kafka-secrets
+              key: bootstrap-servers
+        {{- if .Values.backend.kafka.saslEnabled }}
+        - name: KAFKA_SASL_ENABLED
+          value: "true"
+        - name: KAFKA_SASL_MECHANISM
+          value: {{ .Values.backend.kafka.saslMechanism | quote }}
+        - name: KAFKA_SASL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-kafka-secrets
+              key: username
+        - name: KAFKA_SASL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-kafka-secrets
+              key: password
+        {{- end }}
+        {{- else }}
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: {{ .Values.backend.kafka.bootstrapServers | quote }}
+        {{- end }}
+
+        # JWT secret
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "todo-chatbot.fullname" . }}-backend-secrets
+              key: jwt-secret
+
+        # Application configuration
+        {{- range $key, $value := .Values.backend.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+
+        # Health checks
+        livenessProbe:
+          {{- toYaml .Values.backend.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.backend.readinessProbe | nindent 10 }}
+
+        # Graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

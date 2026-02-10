@@ -1,0 +1,82 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+{{- if .Values.frontend.ingress.enabled }}
+
+Application Access:
+
+{{- range .Values.frontend.ingress.hosts }}
+  Frontend URL: https://{{ .host }}
+{{- end }}
+
+{{- if .Values.backend.ingress.enabled }}
+{{- range .Values.backend.ingress.hosts }}
+  Backend API: https://{{ .host }}
+{{- end }}
+{{- end }}
+
+{{- else }}
+
+To access the application, port-forward the services:
+
+  $ kubectl port-forward -n {{ .Values.global.namespace }} svc/{{ include "todo-chatbot.fullname" . }}-frontend-service 3000:3000
+
+Then open your browser to: http://localhost:3000
+
+{{- end }}
+
+{{- if .Values.monitoring.enabled }}
+
+Monitoring:
+
+  Grafana Dashboard:
+    $ kubectl port-forward -n {{ .Values.monitoring.namespace }} svc/prometheus-grafana 3000:80
+
+  Prometheus:
+    $ kubectl port-forward -n {{ .Values.monitoring.namespace }} svc/prometheus-kube-prometheus-prometheus 9090:9090
+
+{{- end }}
+
+{{- if .Values.dapr.enabled }}
+
+Dapr Dashboard:
+
+  $ dapr dashboard --kubernetes --namespace {{ .Values.global.namespace }}
+
+{{- end }}
+
+Database:
+
+  {{- if .Values.backend.database.external }}
+  External: {{ .Values.backend.database.url | default "Set DATABASE_URL in backend.secrets" }}
+  {{- else if .Values.postgresql.enabled }}
+  Internal PostgreSQL:
+    $ kubectl port-forward -n {{ .Values.global.namespace }} svc/{{ include "todo-chatbot.fullname" . }}-postgresql 5432:5432
+  {{- end }}
+
+Kafka:
+
+  {{- if .Values.backend.kafka.external }}
+  External: {{ .Values.backend.kafka.bootstrapServersExternal | default "Set bootstrap servers in kafka.secrets" }}
+  {{- else if .Values.kafka.enabled }}
+  Internal Redpanda:
+    $ kubectl port-forward -n {{ .Values.global.namespace }} svc/{{ include "todo-chatbot.fullname" . }}-kafka 9092:9092
+  {{- end }}
+
+For production deployment:
+
+  1. Update secrets with actual values (do not use defaults)
+  2. Configure external database (Neon) and Kafka (Redpanda Cloud)
+  3. Set up SSL/TLS certificates with cert-manager
+  4. Configure monitoring and alerting
+  5. Review and adjust resource limits based on load
+
+To uninstall:
+
+  $ helm uninstall {{ .Release.Name }}

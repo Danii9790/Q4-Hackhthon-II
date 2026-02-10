@@ -1,0 +1,27 @@
+---
+{{- if and .Values.frontend.enabled .Values.frontend.ingress.enabled .Values.frontend.ingress.tls }}
+# Certificate for TLS/SSL
+# This requires cert-manager to be installed in the cluster
+{{- if .Values.frontend.ingress.certManagerEnabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "todo-chatbot.fullname" . }}-frontend-tls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "todo-chatbot.frontend.labels" . | nindent 4 }}
+spec:
+  secretName: {{ (index .Values.frontend.ingress.tls 0).secretName }}
+  duration: 2160h  # 90 days
+  renewBefore: 360h  # 15 days before expiration
+  subjectOrganizations:
+    - "Todo Chatbot"
+  dnsNames:
+    {{- range .Values.frontend.ingress.hosts }}
+    - {{ .host }}
+    {{- end }}
+  issuerRef:
+    name: {{ .Values.frontend.ingress.issuer | default "letsencrypt-prod" }}
+    kind: ClusterIssuer
+{{- end }}
+{{- end }}

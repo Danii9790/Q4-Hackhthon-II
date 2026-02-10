@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    workflow_run:
+      workflows: ["Build"]
+      types: [completed]
+
+jobs:
+  deploy-production:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl for DigitalOcean
+        run: |
+          echo "${{ secrets.DIGITALOCEAN_KUBECONFIG }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.12.0'
+
+      - name: Deploy to DigitalOcean Kubernetes
+        run: |
+          helm upgrade --install todo-app ./infrastructure/helm/todo-chatbot \
+            --namespace todo-app \
+            --create-namespace \
+            --values infrastructure/helm/todo-chatbot/values-production.yaml \
+            --set image.repository=${{ secrets.REGISTRY_USERNAME }}/todo-backend \
+            --set image.tag=${{ github.sha }} \
+            --set frontend.image.repository=${{ secrets.REGISTRY_USERNAME }}/todo-frontend \
+            --set frontend.image.tag=${{ github.sha }} \
+            --wait \
+            --timeout 10m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/todo-app-backend -n todo-app
+          kubectl rollout status deployment/todo-app-frontend -n todo-app
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          helm rollback todo-app -n todo-app
