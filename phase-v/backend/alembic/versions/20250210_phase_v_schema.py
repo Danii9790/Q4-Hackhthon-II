@@ -1,7 +1,7 @@
 """Phase V: Advanced Cloud Deployment schema
 
 Revision ID: 20250210_phase_v_schema
-Revises: 20250206_add_conversations_and_messages
+Revises: 20250206_add_conversations
 Create Date: 2026-02-10
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '20250210_phase_v_schema'
-down_revision = '20250206_add_conversations_and_messages'
+down_revision = '20250206_add_conversations'
 branch_labels = None
 depends_on = None
 
