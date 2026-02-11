@@ -34,7 +34,7 @@ mcp>=0.9.0,<1.0.0  # Model Context Protocol SDK
 # Phase V: Event-Driven Architecture
 kafka-python>=2.0.2,<3.0.0  # Kafka client for event streaming
 aiokafka>=0.9.0,<1.0.0  # Async Kafka client
-dapr-sdk-python>=0.1.0,<1.0.0  # Dapr distributed runtime SDK
+# dapr-sdk-python>=0.1.0,<1.0.0  # Dapr distributed runtime SDK (Optional - commented out)
 httpx>=0.27.0,<1.0.0  # Async HTTP client (already required by openai)
 
 # Phase V: Monitoring and Observability

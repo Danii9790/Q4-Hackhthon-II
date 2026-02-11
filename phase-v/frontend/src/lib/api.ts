@@ -251,7 +251,7 @@ export const taskApi = {
     offset?: number
     limit?: number
   } = {}): Promise<TaskListResponse> {
-    const params: Record<string, any> = {
+    const params: Record<string, string | string[] | number> = {
       offset: filters.offset || 0,
       limit: filters.limit || 50,
     }
