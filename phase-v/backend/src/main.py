@@ -96,6 +96,7 @@ app.add_middleware(
         "https://q4-hackhthon-ii.vercel.app",
         "https://todo-application-rho-flax.vercel.app",
         "https://todo-application-chatbot.vercel.app",
+        "https://todo.daniyalxdev.me",  # Production frontend
     ],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
