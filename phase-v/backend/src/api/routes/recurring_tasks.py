@@ -27,7 +27,7 @@ from src.services.recurring_service import (
 
 
 # Router configuration
-router = APIRouter(prefix="/api/recurring-tasks", tags=["Recurring Tasks"])
+router = APIRouter(prefix="/recurring-tasks", tags=["Recurring Tasks"])
 
 
 # ============================================================================

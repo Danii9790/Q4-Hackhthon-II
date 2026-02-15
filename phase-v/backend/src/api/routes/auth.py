@@ -22,7 +22,7 @@ from src.models import User
 logger = logging.getLogger(__name__)
 
 # Router configuration
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Security configuration
 SECRET_KEY = os.getenv("BETTER_AUTH_SECRET")

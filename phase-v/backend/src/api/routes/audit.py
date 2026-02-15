@@ -20,7 +20,7 @@ from src.services.audit_service import AuditService
 
 
 # Router configuration
-router = APIRouter(prefix="/api", tags=["Audit"])
+router = APIRouter(tags=["Audit"])
 
 
 # ============================================================================

@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Router Configuration
 # ============================================================================
 
-router = APIRouter(prefix="/api/users/{user_id}", tags=["Chat"])
+router = APIRouter(prefix="/users/{user_id}", tags=["Chat"])
 # Note: Rate limiter is attached to main FastAPI app in main.py
 
 

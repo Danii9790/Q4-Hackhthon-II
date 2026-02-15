@@ -22,10 +22,10 @@ from src.services.task import create_task, list_tasks, get_task, update_task, co
 
 
 # Router configuration
-router = APIRouter(prefix="/api/users/{user_id}", tags=["Tasks"])
+router = APIRouter(prefix="/users/{user_id}", tags=["Tasks"])
 
 # Additional router for task-specific endpoints (without user_id in prefix)
-task_router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
+task_router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 # ============================================================================
