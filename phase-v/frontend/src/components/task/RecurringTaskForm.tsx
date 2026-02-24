@@ -17,6 +17,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/ToastContainer'
+import { recurringTaskApi } from '@/lib/api'
 import { colors } from '@/styles/tokens'
 import { fadeIn, buttonHover, buttonTap } from '@/lib/animations'
 
@@ -132,20 +133,7 @@ export default function RecurringTaskForm({
       }
 
       // Call create recurring task API
-      const response = await fetch('/api/recurring-tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recurringTaskData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail?.message || 'Failed to create recurring task')
-      }
-
-      const createdRecurringTask = await response.json()
+      const createdRecurringTask = await recurringTaskApi.createRecurringTask(recurringTaskData)
 
       // Call callback with created recurring task
       onRecurringTaskCreated(createdRecurringTask)

@@ -18,7 +18,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { taskApi } from '@/lib/api'
+import { taskApi, recurringTaskApi } from '@/lib/api'
 import { useToast } from '@/components/ui/ToastContainer'
 import CreateTaskForm from '@/components/task/CreateTaskForm'
 import TaskList from '@/components/task/TaskList'
@@ -73,11 +73,7 @@ export default function DashboardPage() {
    */
   const fetchRecurringTasks = useCallback(async () => {
     try {
-      const response = await fetch('/api/recurring-tasks')
-      if (!response.ok) {
-        throw new Error('Failed to fetch recurring tasks')
-      }
-      const data = await response.json()
+      const data = await recurringTaskApi.getRecurringTasks()
       setRecurringTasks(data.recurring_tasks || [])
     } catch (error) {
       console.error('Failed to fetch recurring tasks:', error)

@@ -27,7 +27,7 @@ from src.services.recurring_service import (
 
 
 # Router configuration
-router = APIRouter(prefix="/recurring-tasks", tags=["Recurring Tasks"])
+router = APIRouter(prefix="/api/recurring-tasks", tags=["Recurring Tasks"])
 
 
 # ============================================================================
@@ -64,7 +64,7 @@ class RecurringTaskCreateRequest(BaseModel):
     @classmethod
     def validate_frequency(cls, v: str) -> str:
         """Validate frequency is a valid option."""
-        valid_frequencies = [f.value for f in Frequency]
+        valid_frequencies = ["DAILY", "WEEKLY", "MONTHLY"]
         if v not in valid_frequencies:
             raise ValueError(f"Frequency must be one of {valid_frequencies}")
         return v

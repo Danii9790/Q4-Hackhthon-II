@@ -32,13 +32,13 @@ def calculate_next_occurrence(
     Raises:
         ValueError: If frequency is invalid
     """
-    if frequency == Frequency.DAILY:
+    if frequency == "DAILY":
         # T058: Add 1 day
         return current_date + timedelta(days=1)
-    elif frequency == Frequency.WEEKLY:
+    elif frequency == "WEEKLY":
         # T059: Add 7 days
         return current_date + timedelta(weeks=1)
-    elif frequency == Frequency.MONTHLY:
+    elif frequency == "MONTHLY":
         # T060: Add 1 month (handle month edge cases)
         # Simple approach: add ~30 days and adjust to same day number
         year = current_date.year
@@ -102,7 +102,7 @@ def create_recurring_task(
         ValueError: If parameters are invalid
     """
     # Validate frequency
-    valid_frequencies = [f.value for f in Frequency]
+    valid_frequencies = ["DAILY", "WEEKLY", "MONTHLY"]
     if frequency not in valid_frequencies:
         raise ValueError(f"Invalid frequency: {frequency}. Must be one of {valid_frequencies}")
 

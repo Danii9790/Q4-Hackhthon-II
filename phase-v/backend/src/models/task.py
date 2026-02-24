@@ -52,7 +52,7 @@ class Task(SQLModel, table=True):
     """
     __tablename__ = "tasks"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: str = Field(foreign_key="users.id")
     title: str = Field(max_length=200)
     description: Optional[str] = Field(default=None, max_length=1000)
@@ -61,8 +61,10 @@ class Task(SQLModel, table=True):
     # Phase V: Advanced Task Management Fields
     due_date: Optional[datetime] = Field(default=None)
     priority: str = Field(default="MEDIUM", sa_column=Column(String(10)))
-    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
-    recurring_task_id: Optional[str] = Field(default=None, foreign_key="recurring_tasks.id")
+    tags: List[str] = Field(default=[], sa_column=Column(JSON))
+    # recurring_task_id: Optional[str] = Field(default=None, foreign_key="recurring_tasks.id")
+    # NOTE: Temporarily disabled due to SQLModel metadata registration issue
+    # This will be re-enabled once circular import is resolved
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

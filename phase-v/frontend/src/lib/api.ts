@@ -17,11 +17,12 @@ import { getAuthToken, getCurrentUser, clearSession } from '@/lib/auth';
 
 /**
  * Create configured Axios instance with base URL from environment.
+ * Note: baseURL should just be the server URL, paths include /api prefix
  */
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const apiClient: AxiosInstance = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -109,7 +110,7 @@ export const chatApi = {
     }
 
     const response = await apiClient.post<ChatResponse>(
-      `/users/${userId}/chat`,
+      `/api/users/${userId}/chat`,
       { message } as ChatRequest
     );
     return response.data;
@@ -135,7 +136,7 @@ export const taskApi = {
       throw new Error('User not authenticated');
     }
 
-    const response = await apiClient.get<TaskListResponse>(`/users/${userId}/tasks`, {
+    const response = await apiClient.get<TaskListResponse>(`/api/users/${userId}/tasks`, {
       params: { offset, limit },
     });
     return response.data;
@@ -155,7 +156,7 @@ export const taskApi = {
       throw new Error('User not authenticated');
     }
 
-    const response = await apiClient.get<Task>(`/users/${userId}/tasks/${id}`);
+    const response = await apiClient.get<Task>(`/api/users/${userId}/tasks/${id}`);
     return response.data;
   },
 
@@ -173,7 +174,7 @@ export const taskApi = {
       throw new Error('User not authenticated');
     }
 
-    const response = await apiClient.post<Task>(`/users/${userId}/tasks`, data);
+    const response = await apiClient.post<Task>(`/api/users/${userId}/tasks`, data);
     return response.data;
   },
 
@@ -187,7 +188,7 @@ export const taskApi = {
    * @returns Updated task
    */
   async updateTask(id: number, data: TaskUpdateRequest): Promise<Task> {
-    const response = await apiClient.patch<Task>(`/tasks/${id}`, data);
+    const response = await apiClient.patch<Task>(`/api/tasks/${id}`, data);
     return response.data;
   },
 
@@ -200,7 +201,7 @@ export const taskApi = {
    * @returns Updated task with completed=true
    */
   async completeTask(id: number): Promise<Task> {
-    const response = await apiClient.patch<Task>(`/tasks/${id}/complete`);
+    const response = await apiClient.patch<Task>(`/api/tasks/${id}/complete`);
     return response.data;
   },
 
@@ -213,7 +214,7 @@ export const taskApi = {
    * @returns Updated task with completed=false
    */
   async uncompleteTask(id: number): Promise<Task> {
-    const response = await apiClient.patch<Task>(`/tasks/${id}/uncomplete`);
+    const response = await apiClient.patch<Task>(`/api/tasks/${id}/uncomplete`);
     return response.data;
   },
 
@@ -225,7 +226,7 @@ export const taskApi = {
    * @param id - Task ID
    */
   async deleteTask(id: number): Promise<void> {
-    await apiClient.delete(`/tasks/${id}`);
+    await apiClient.delete(`/api/tasks/${id}`);
   },
 
   // ========================================================================
@@ -264,7 +265,7 @@ export const taskApi = {
     if (filters.sortBy) params.sort_by = filters.sortBy
     if (filters.sortOrder) params.sort_order = filters.sortOrder
 
-    const response = await apiClient.get<TaskListResponse>('/tasks', { params })
+    const response = await apiClient.get<TaskListResponse>('/api/tasks', { params })
     return response.data
   },
 
@@ -304,7 +305,7 @@ export const taskApi = {
    * @returns Updated task
    */
   async setTaskPriority(id: number, priority: 'LOW' | 'MEDIUM' | 'HIGH'): Promise<Task> {
-    const response = await apiClient.patch<Task>(`/tasks/${id}/priority`, { priority })
+    const response = await apiClient.patch<Task>(`/api/tasks/${id}/priority`, { priority })
     return response.data
   },
 
@@ -318,7 +319,7 @@ export const taskApi = {
    * @returns Updated task
    */
   async setTaskDueDate(id: number, dueDate: string | null): Promise<Task> {
-    const response = await apiClient.patch<Task>(`/tasks/${id}/due-date`, { due_date: dueDate })
+    const response = await apiClient.patch<Task>(`/api/tasks/${id}/due-date`, { due_date: dueDate })
     return response.data
   },
 
@@ -332,8 +333,49 @@ export const taskApi = {
    * @returns Updated task
    */
   async addTaskTags(id: number, tags: string[]): Promise<Task> {
-    const response = await apiClient.post<Task>(`/tasks/${id}/tags`, { tags })
+    const response = await apiClient.post<Task>(`/api/tasks/${id}/tags`, { tags })
     return response.data
+  },
+};
+
+/**
+ * Recurring Task API methods.
+ */
+export const recurringTaskApi = {
+  /**
+   * Get all recurring tasks for the authenticated user.
+   *
+   * GET /api/recurring-tasks
+   *
+   * @returns List of recurring task templates
+   */
+  async getRecurringTasks(): Promise<any> {
+    const response = await apiClient.get('/api/recurring-tasks');
+    return response.data;
+  },
+
+  /**
+   * Create a new recurring task template.
+   *
+   * POST /api/recurring-tasks
+   *
+   * @param data - Recurring task creation request
+   * @returns Created recurring task template
+   */
+  async createRecurringTask(data: any): Promise<any> {
+    const response = await apiClient.post('/api/recurring-tasks', data);
+    return response.data;
+  },
+
+  /**
+   * Delete a recurring task template.
+   *
+   * DELETE /api/recurring-tasks/{id}
+   *
+   * @param id - Recurring task ID
+   */
+  async deleteRecurringTask(id: number): Promise<void> {
+    await apiClient.delete(`/api/recurring-tasks/${id}`);
   },
 };
 

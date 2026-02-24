@@ -22,10 +22,10 @@ from src.services.task import create_task, list_tasks, get_task, update_task, co
 
 
 # Router configuration
-router = APIRouter(prefix="/users/{user_id}", tags=["Tasks"])
+router = APIRouter(prefix="/api/users/{user_id}", tags=["Tasks"])
 
 # Additional router for task-specific endpoints (without user_id in prefix)
-task_router = APIRouter(prefix="/tasks", tags=["Tasks"])
+task_router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
 
 
 # ============================================================================
@@ -111,7 +111,7 @@ class TaskResponse(BaseModel):
     """
     Response schema for a single task.
     """
-    id: int = Field(..., description="Task ID")
+    id: str = Field(..., description="Task ID (UUID)")
     user_id: str = Field(..., description="Owner user ID")
     title: str = Field(..., description="Task title")
     description: Optional[str] = Field(None, description="Task description")
@@ -119,7 +119,7 @@ class TaskResponse(BaseModel):
     completed_at: Optional[datetime] = Field(None, description="Task completion timestamp")
     due_date: Optional[datetime] = Field(None, description="Task due date")
     priority: str = Field("MEDIUM", description="Task priority")
-    tags: List[str] = Field(default_factory=list, description="Task tags")
+    tags: List[str] = Field(default=[], description="Task tags")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -242,7 +242,7 @@ def get_user_tasks(
     # Convert Task models to response schemas
     task_responses = [
         TaskResponse(
-            id=task.id,
+            id=str(task.id),  # Convert UUID to string
             user_id=task.user_id,
             title=task.title,
             description=task.description,
@@ -318,7 +318,7 @@ def create_user_task(
 
     # Convert to response schema
     return TaskResponse(
-        id=task.id,
+        id=str(task.id),  # Convert UUID to string
         user_id=task.user_id,
         title=task.title,
         description=task.description,
@@ -345,7 +345,7 @@ def create_user_task(
 )
 def get_user_task(
     user_id: str,
-    task_id: int,
+    task_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
@@ -384,7 +384,7 @@ def get_user_task(
 
     # Convert to response schema
     return TaskResponse(
-        id=task.id,
+        id=str(task.id),
         user_id=task.user_id,
         title=task.title,
         description=task.description,
@@ -412,7 +412,7 @@ def get_user_task(
 )
 def update_user_task(
     user_id: str,
-    task_id: int,
+    task_id: str,
     request: TaskUpdateRequest,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -467,7 +467,7 @@ def update_user_task(
 
     # Convert to response schema
     return TaskResponse(
-        id=task.id,
+        id=str(task.id),
         user_id=task.user_id,
         title=task.title,
         description=task.description,
@@ -497,7 +497,7 @@ def update_user_task(
     }
 )
 def delete_user_task(
-    task_id: int,
+    task_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> DeleteTaskResponse:
@@ -551,7 +551,7 @@ def delete_user_task(
     }
 )
 def complete_task_endpoint(
-    task_id: int,
+    task_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
@@ -587,7 +587,7 @@ def complete_task_endpoint(
 
     # Convert to response schema
     return TaskResponse(
-        id=task.id,
+        id=str(task.id),
         user_id=task.user_id,
         title=task.title,
         description=task.description,
@@ -613,7 +613,7 @@ def complete_task_endpoint(
     }
 )
 def uncomplete_task_endpoint(
-    task_id: int,
+    task_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> TaskResponse:
@@ -649,7 +649,7 @@ def uncomplete_task_endpoint(
 
     # Convert to response schema
     return TaskResponse(
-        id=task.id,
+        id=str(task.id),
         user_id=task.user_id,
         title=task.title,
         description=task.description,
@@ -721,7 +721,7 @@ def get_tasks_with_filters(
 
     task_responses = [
         TaskResponse(
-            id=task.id, user_id=task.user_id, title=task.title,
+            id=str(task.id), user_id=task.user_id, title=task.title,
             description=task.description, completed=task.completed,
             created_at=task.created_at, updated_at=task.updated_at
         ) for task in tasks
@@ -732,7 +732,7 @@ def get_tasks_with_filters(
 
 @task_router.patch("/{task_id}/priority", response_model=TaskResponse)
 def set_task_priority_endpoint(
-    task_id: int,
+    task_id: str,
     request: dict,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -747,7 +747,7 @@ def set_task_priority_endpoint(
     task = service_set_task_priority(task_id=task_id, user_id=authenticated_user_id, priority=priority, session=session)
 
     return TaskResponse(
-        id=task.id, user_id=task.user_id, title=task.title,
+        id=str(task.id), user_id=task.user_id, title=task.title,
         description=task.description, completed=task.completed,
         created_at=task.created_at, updated_at=task.updated_at
     )
@@ -755,7 +755,7 @@ def set_task_priority_endpoint(
 
 @task_router.patch("/{task_id}/due-date", response_model=TaskResponse)
 def set_task_due_date_endpoint(
-    task_id: int,
+    task_id: str,
     request: dict,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -772,7 +772,7 @@ def set_task_due_date_endpoint(
     task = service_set_task_due_date(task_id=task_id, user_id=authenticated_user_id, due_date=due_date_dt, session=session)
 
     return TaskResponse(
-        id=task.id, user_id=task.user_id, title=task.title,
+        id=str(task.id), user_id=task.user_id, title=task.title,
         description=task.description, completed=task.completed,
         created_at=task.created_at, updated_at=task.updated_at
     )
@@ -780,7 +780,7 @@ def set_task_due_date_endpoint(
 
 @task_router.post("/{task_id}/tags", response_model=TaskResponse)
 def add_task_tags_endpoint(
-    task_id: int,
+    task_id: str,
     request: dict,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -795,7 +795,7 @@ def add_task_tags_endpoint(
     task = service_add_task_tags(task_id=task_id, user_id=authenticated_user_id, tags=tags, session=session)
 
     return TaskResponse(
-        id=task.id, user_id=task.user_id, title=task.title,
+        id=str(task.id), user_id=task.user_id, title=task.title,
         description=task.description, completed=task.completed,
         created_at=task.created_at, updated_at=task.updated_at
     )
@@ -808,7 +808,7 @@ def add_task_tags_endpoint(
 
 @task_router.post("/{task_id}/reminders", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_task_reminder_endpoint(
-    task_id: int,
+    task_id: str,
     request: dict,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
@@ -868,7 +868,7 @@ def create_task_reminder_endpoint(
 
 @task_router.get("/{task_id}/reminders", response_model=list)
 def list_task_reminders_endpoint(
-    task_id: int,
+    task_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     session: Annotated[Session, Depends(get_session)] = None
 ) -> list:
@@ -998,8 +998,8 @@ class AuditEventResponse(BaseModel):
     """
     Response schema for a single audit event.
     """
-    id: int = Field(..., description="Event ID")
-    task_id: int = Field(..., description="Task ID")
+    id: str = Field(..., description="Event ID")
+    task_id: str = Field(..., description="Task ID (UUID)")
     user_id: str = Field(..., description="User who performed the action")
     event_type: str = Field(..., description="Event type (created, updated, completed, deleted)")
     timestamp: datetime = Field(..., description="Event timestamp")
@@ -1010,7 +1010,7 @@ class AuditTrailResponse(BaseModel):
     """
     Response schema for audit trail query.
     """
-    task_id: int = Field(..., description="Task ID")
+    task_id: str = Field(..., description="Task ID (UUID)")
     events: List[AuditEventResponse] = Field(..., description="List of audit events")
     total: int = Field(..., description="Total number of events")
 
@@ -1036,7 +1036,7 @@ class UserActivityResponse(BaseModel):
     }
 )
 def get_task_audit_trail(
-    task_id: int,
+    task_id: str,
     authenticated_user_id: Annotated[str, Depends(get_current_user_id)],
     limit: Annotated[int, Query(ge=1, le=100, description="Max number of events to return")] = 50,
     session: Annotated[Session, Depends(get_session)] = None

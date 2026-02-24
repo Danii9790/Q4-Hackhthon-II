@@ -34,7 +34,7 @@ class TaskEvent(SQLModel, table=True):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     event_type: str = Field(index=True)
-    task_id: int = Field(foreign_key="tasks.id", index=True)
+    task_id: str = Field(foreign_key="tasks.id", index=True)  # Changed from int to str for UUID
     user_id: str = Field(foreign_key="users.id", index=True)
     event_data: Dict[str, Any] = Field(sa_column=Column(JSON), default_factory=dict)
     timestamp: datetime = Field(

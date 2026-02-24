@@ -10,6 +10,7 @@ from typing import Optional, Tuple, List
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+import uuid
 
 from src.models.task import Task, Priority
 
@@ -135,6 +136,7 @@ def create_task(
     # Create task with all fields
     now = datetime.now(timezone.utc)
     task = Task(
+        id=uuid.uuid4(),  # Generate UUID for task ID
         title=title.strip(),
         description=description,
         user_id=user_id,
@@ -159,7 +161,7 @@ def create_task(
                 task_id=task.id,
                 user_id=user_id,
                 task_data={
-                    "id": task.id,
+                    "id": str(task.id),  # Convert UUID to string
                     "title": task.title,
                     "description": task.description,
                     "completed": task.completed,
@@ -176,11 +178,17 @@ def create_task(
         return task
     except Exception as e:
         session.rollback()
+        # Log the actual error for debugging
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to create task: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "code": "DATABASE_ERROR",
-                "message": "Failed to create task"
+                "message": f"Failed to create task: {str(e)}"
             }
         )
 
@@ -560,7 +568,7 @@ def update_task(
                 user_id=user_id,
                 old_data={},  # TODO: Track before state
                 new_data={
-                    "id": task.id,
+                    "id": str(task.id),
                     "title": task.title,
                     "description": task.description,
                     "completed": task.completed,
@@ -630,7 +638,7 @@ def complete_task(task_id: int, user_id: str, session: Session) -> Task:
                 task_id=task.id,
                 user_id=user_id,
                 task_data={
-                    "id": task.id,
+                    "id": str(task.id),
                     "title": task.title,
                     "description": task.description,
                     "completed": task.completed,

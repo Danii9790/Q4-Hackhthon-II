@@ -16,14 +16,14 @@ class AuditService:
     @staticmethod
     def log_task_created(
         session: Session,
-        task_id: int,
+        task_id: str,  # Changed from int to str/UUID
         user_id: str,
         task_data: Dict[str, Any],
     ):
         """Log task creation to audit trail"""
         event = TaskEvent(
             event_type="created",
-            task_id=task_id,
+            task_id=str(task_id),  # Convert to string
             user_id=user_id,
             event_data={
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -39,7 +39,7 @@ class AuditService:
     @staticmethod
     def log_task_updated(
         session: Session,
-        task_id: int,
+        task_id: str,  # Changed from int to str/UUID
         user_id: str,
         old_data: Dict[str, Any],
         new_data: Dict[str, Any],
@@ -48,7 +48,7 @@ class AuditService:
         """Log task update to audit trail"""
         event = TaskEvent(
             event_type="updated",
-            task_id=task_id,
+            task_id=str(task_id),  # Convert to string
             user_id=user_id,
             event_data={
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -64,14 +64,14 @@ class AuditService:
     @staticmethod
     def log_task_completed(
         session: Session,
-        task_id: int,
+        task_id: str,  # Changed from int to str/UUID
         user_id: str,
         task_data: Dict[str, Any],
     ):
         """Log task completion to audit trail"""
         event = TaskEvent(
             event_type="completed",
-            task_id=task_id,
+            task_id=str(task_id),  # Convert to string
             user_id=user_id,
             event_data={
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -87,7 +87,7 @@ class AuditService:
     @staticmethod
     def log_task_deleted(
         session: Session,
-        task_id: int,
+        task_id: str,  # Changed from int to str/UUID
         user_id: str,
         deleted_data: Dict[str, Any],
     ):
